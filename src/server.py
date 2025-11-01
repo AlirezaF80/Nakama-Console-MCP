@@ -20,32 +20,37 @@ logging.basicConfig(level=logging.INFO)
 
 
 async def run_mcp_server(settings: Any):
-    """Attempt to start the official MCP server. If `mcp` package is missing,
-    this function will warn and return.
+    """Start the MCP stdio server using the installed `mcp` SDK.
+
+    This function wires our Nakama client into the MCP Server by registering
+    tool metadata and a tool-call dispatcher, then runs the server over stdio.
     """
     try:
-        from mcp import Server
+        import mcp
+        from mcp.server.lowlevel.server import Server
+        from mcp import stdio_server
     except Exception:
-        logger.warning(
-            "`mcp` package not available or import failed. Install the official MCP SDK to run as an MCP server."
-        )
+        logger.exception("mcp SDK not available. Install the 'mcp' package to run as MCP server.")
         return
 
     client = NakamaConsoleClient(settings)
     await client.authenticate()
 
-    server = Server(server_name="nakama-console-mcp")
-    # Register tools (best-effort; adjust for your MCP SDK if needed)
+    # Instantiate server with a name and optional version/instructions
+    server = Server(name="nakama-console-mcp", version=None, instructions="Nakama Console read-only MCP server")
+
+    # Register account tools (populates server._tool_cache via list_tools decorator)
     register_account_tools(server, client)
 
-    logger.info("Starting MCP server 'nakama-console-mcp'...")
-    try:
-        # The exact run API may differ depending on mcp SDK version.
-        await server.run_stdio()
-    except AttributeError:
-        logger.warning("`Server.run_stdio()` not available on this MCP SDK. Implement the correct entrypoint for your MCP server.")
-    finally:
-        await client.close()
+    logger.info("Starting MCP server 'nakama-console-mcp' over stdio...")
+
+    # Use the stdio transport provided by the SDK
+    async with stdio_server() as (read_stream, write_stream):
+        initialization_options = server.create_initialization_options()
+        # server.run expects (read_stream, write_stream, initialization_options)
+        await server.run(read_stream, write_stream, initialization_options)
+
+    await client.close()
 
 
 async def cli_test_list_accounts(settings: Any, limit: int = 5):
