@@ -1,0 +1,1 @@
+# nakama-console-mcp package
