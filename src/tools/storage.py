@@ -6,9 +6,44 @@ from ..nakama_client import NakamaConsoleClient
 async def nakama_list_collections(client: NakamaConsoleClient):
     """List all storage collection names.
 
-    Returns a list of collection names that exist in the storage system.
+    Since the Nakama Console API doesn't provide a dedicated collections endpoint,
+    this function discovers collections by scanning storage objects and extracting
+    unique collection names. It handles pagination to find all collections.
+
+    Returns a dict with:
+        - collections: Sorted list of unique collection names
+        - total_scanned: Number of storage objects scanned
+        - note: Explanation of how collections were discovered
     """
-    return await client.get("/v2/console/storage/collection")
+    collections = set()
+    cursor = None
+    total_scanned = 0
+    
+    # Scan storage objects to extract unique collection names
+    while True:
+        response = await nakama_list_storage(client, cursor=cursor)
+        
+        objects = response.get("objects", [])
+        if not objects:
+            break
+            
+        for obj in objects:
+            collection_name = obj.get("collection")
+            if collection_name:
+                collections.add(collection_name)
+        
+        total_scanned += len(objects)
+        
+        # Check if there are more results
+        cursor = response.get("next_cursor")
+        if not cursor:
+            break
+    
+    return {
+        "collections": sorted(list(collections)),
+        "total_scanned": total_scanned,
+        "note": "Collections discovered by scanning storage objects"
+    }
 
 
 async def nakama_list_storage(

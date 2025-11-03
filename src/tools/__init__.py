@@ -68,21 +68,6 @@ def register_all_tools(server, client: NakamaConsoleClient):
         )
     )
 
-    # nakama_get_wallet_ledger
-    tools.append(
-        mcp.Tool(
-            name="nakama_get_wallet_ledger",
-            title="Get wallet ledger",
-            description="Get wallet ledger for an account",
-            inputSchema={
-                "type": "object",
-                "properties": {"account_id": {"type": "string"}, "limit": {"type": "integer"}, "cursor": {"type": "string"}},
-                "required": ["account_id"],
-            },
-            outputSchema=None,
-        )
-    )
-
     # nakama_get_friends
     tools.append(
         mcp.Tool(

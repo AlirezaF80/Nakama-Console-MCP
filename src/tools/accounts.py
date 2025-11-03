@@ -28,15 +28,6 @@ async def nakama_export_account(client: NakamaConsoleClient, id: str):
     return await client.get(f"/v2/console/account/{id}/export")
 
 
-async def nakama_get_wallet_ledger(client: NakamaConsoleClient, account_id: str, limit: Optional[int] = None, cursor: Optional[str] = None):
-    params = {}
-    if limit is not None:
-        params["limit"] = limit
-    if cursor is not None:
-        params["cursor"] = cursor
-    return await client.get(f"/v2/console/account/{account_id}/wallet", params=params)
-
-
 async def nakama_get_friends(client: NakamaConsoleClient, id: str):
     return await client.get(f"/v2/console/account/{id}/friend")
 
@@ -49,7 +40,6 @@ __all__ = [
     "nakama_list_accounts",
     "nakama_get_account",
     "nakama_export_account",
-    "nakama_get_wallet_ledger",
     "nakama_get_friends",
     "nakama_get_user_groups",
 ]
