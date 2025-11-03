@@ -162,8 +162,6 @@ def register_all_tools(server, client: NakamaConsoleClient):
                 return await _accounts.nakama_get_account(client, **arguments)
             if tool_name == "nakama_export_account":
                 return await _accounts.nakama_export_account(client, **arguments)
-            if tool_name == "nakama_get_wallet_ledger":
-                return await _accounts.nakama_get_wallet_ledger(client, **arguments)
             if tool_name == "nakama_get_friends":
                 return await _accounts.nakama_get_friends(client, **arguments)
             if tool_name == "nakama_get_user_groups":
