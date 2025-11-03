@@ -13,7 +13,7 @@ from typing import Any
 
 from .config import load_settings
 from .nakama_client import NakamaConsoleClient
-from .tools import register_account_tools
+from .tools import register_all_tools
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -39,8 +39,8 @@ async def run_mcp_server(settings: Any):
     # Instantiate server with a name and optional version/instructions
     server = Server(name="nakama-console-mcp", version=None, instructions="Nakama Console read-only MCP server")
 
-    # Register account tools (populates server._tool_cache via list_tools decorator)
-    register_account_tools(server, client)
+    # Register all tools (account and storage)
+    register_all_tools(server, client)
 
     logger.info("Starting MCP server 'nakama-console-mcp' over stdio...")
 
