@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """MCP server bootstrap for Nakama Console (read-only).
 
 This module is intentionally small: it loads settings, creates the Nakama client,
@@ -11,9 +12,9 @@ import logging
 import sys
 from typing import Any
 
-from .config import load_settings
-from .nakama_client import NakamaConsoleClient
-from .tools import register_all_tools
+from src.config import load_settings
+from src.nakama_client import NakamaConsoleClient
+from src.tools import register_all_tools
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)

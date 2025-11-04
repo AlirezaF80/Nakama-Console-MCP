@@ -1,6 +1,6 @@
 from typing import Optional
 
-from ..nakama_client import NakamaConsoleClient
+from src.nakama_client import NakamaConsoleClient
 
 
 async def nakama_list_collections(client: NakamaConsoleClient):

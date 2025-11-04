@@ -1,7 +1,7 @@
 from typing import Optional
 
-from ..nakama_client import NakamaConsoleClient
-from ..models import ListAccountsArgs, GetAccountArgs
+from src.nakama_client import NakamaConsoleClient
+from src.models import ListAccountsArgs, GetAccountArgs
 
 
 async def nakama_list_accounts(client: NakamaConsoleClient, filter: Optional[str] = None, tombstones: Optional[bool] = None, cursor: Optional[str] = None):

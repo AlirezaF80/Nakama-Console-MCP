@@ -2,7 +2,7 @@
 
 from typing import Any, Awaitable, Callable, Dict
 
-from ..nakama_client import NakamaConsoleClient
+from src.nakama_client import NakamaConsoleClient
 
 
 def register_all_tools(server, client: NakamaConsoleClient):
@@ -15,8 +15,8 @@ def register_all_tools(server, client: NakamaConsoleClient):
     decorators would overwrite each other rather than merging.
     """
     # lazy import to avoid circular issues
-    from . import accounts as _accounts
-    from . import storage as _storage
+    from src.tools import accounts as _accounts
+    from src.tools import storage as _storage
     import mcp
 
     # Build tool definitions using mcp.Tool
@@ -192,3 +192,4 @@ def register_storage_tools(server, client: NakamaConsoleClient):
 
 
 __all__ = ["register_all_tools", "register_account_tools", "register_storage_tools"]
+

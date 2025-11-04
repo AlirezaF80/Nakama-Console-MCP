@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 
 import httpx
 
-from .config import NakamaSettings
+from src.config import NakamaSettings
 
 logger = logging.getLogger(__name__)
 
