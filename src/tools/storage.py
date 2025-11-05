@@ -1,4 +1,5 @@
 from typing import Optional
+import json
 
 from src.nakama_client import NakamaConsoleClient
 
@@ -48,8 +49,58 @@ async def nakama_get_storage_object(
 
     Returns the full storage object including the JSON value content.
     """
-    params = {"collection": collection, "key": key, "user_id": user_id}
-    return await client.get("/v2/console/storage", params=params)
+    # Use the Console API Explorer to call the ReadStorageObjects client API
+    # The console endpoint expects a JSON body as a string in the `body` field.
+    read_request = {"objectIds": [{"collection": collection, "key": key}]}
+
+    payload = {
+        "user_id": user_id,
+        "body": json.dumps(read_request),
+        "session_vars": {},
+    }
+
+    resp = await client.post("/v2/console/api/endpoints/ReadStorageObjects", json_data=payload)
+
+    # The console proxy returns a JSON with a `body` field that is itself a JSON string
+    # containing the actual ReadStorageObjects response. Example: {"body": "{\"objects\": [...]}"}
+    if not resp:
+        return resp
+
+    # If an error message was returned by the proxy, propagate it
+    if isinstance(resp, dict) and resp.get("error_message"):
+        return resp
+
+    body_str = None
+    if isinstance(resp, dict) and "body" in resp:
+        body_str = resp.get("body")
+
+    if not body_str:
+        # Fall back to returning raw response if unexpected shape
+        return resp
+
+    try:
+        body = json.loads(body_str)
+    except Exception:
+        # If body is not valid JSON, return the raw body string
+        return {"body": body_str}
+
+    objects = body.get("objects") if isinstance(body, dict) else None
+    if not objects:
+        return body
+
+    obj = objects[0]
+
+    # If the storage object's value is a JSON-encoded string, parse it for convenience.
+    value = obj.get("value")
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            obj["value"] = parsed
+        except Exception:
+            # leave as string if not JSON
+            pass
+
+    return obj
 
 
 __all__ = [

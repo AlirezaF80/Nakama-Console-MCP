@@ -69,6 +69,20 @@ class NakamaConsoleClient:
         resp.raise_for_status()
         return resp.json()
 
+    async def post(self, path: str, json_data: Optional[Dict[str, Any]] = None) -> Any:
+        """POST request with automatic authentication and retry on 401 once."""
+        url = path if path.startswith("http") else f"{self.base_url}{path}"
+        headers = self._auth_headers()
+        resp = await self._client.post(url, json=json_data or {}, headers=headers)
+        if resp.status_code == 401:
+            # try reauth once
+            logger.info("Token unauthorized, reauthenticating and retrying POST %s", path)
+            await self.authenticate()
+            headers = self._auth_headers()
+            resp = await self._client.post(url, json=json_data or {}, headers=headers)
+        resp.raise_for_status()
+        return resp.json()
+
     async def close(self) -> None:
         await self._client.aclose()
 
