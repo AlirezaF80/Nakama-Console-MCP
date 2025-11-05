@@ -24,26 +24,71 @@ python server.py --mcp
 
 ## Configuring the Local MCP entry (mcp.json)
 
-If you run the MCP server from the VS Code LocalProcess MCP host (or any client
-that reads an `mcp.json` file), you need to point the `nakama-console-mcp`
-entry to the root `server.py` we provide. Below are recommended examples.
+If you run the MCP server from the VS Code LocalProcess MCP host (or any client that reads an `mcp.json` file), you need to point the `nakama-console-mcp` entry to the root `server.py` we provide. Below are recommended examples.
 
-1. User/global `mcp.json` (Windows absolute path example)
+**1. User/global `mcp.json` (Windows absolute path example)**
 
-Place or update the `nakama-console-mcp` entry in your `mcp.json` (this is
-typically the file stored under your VS Code user data / roaming profile)
-so it points to the repository `server.py` and passes the `--mcp` flag:
+Place or update the `nakama-console-mcp` entry in your `mcp.json` (this is typically the file stored under your VS Code user data / roaming profile) so it points to the repository `server.py` and passes the `--mcp` flag:
 
 ```json
 "nakama-console-mcp": {
-	"type": "stdio",
-	"command": "python",
-	"args": [
-		"C:\\MCP Servers\\Nakama-Console-MCP\\server.py",
-		"--mcp"
-	]
+ "type": "stdio",
+ "command": "python",
+ "args": [
+  "C:\\MCP Servers\\Nakama-Console-MCP\\server.py",
+  "--mcp"
+ ]
 }
 ```
+
+**2. Per-workspace `.vscode/mcp.json` (recommended for project-specific configs)**
+
+For project-specific configurations, add an `mcp.json` under the workspace's `.vscode/` folder. This keeps the configuration alongside the project and lets VS Code automatically start the correct MCP server for that workspace.
+
+Example that uses secure input variables (recommended):
+
+```json
+{
+ "servers": {
+  "nakama-console-mcp": {
+   "type": "stdio",
+   "command": "python",
+   "args": ["-m", "src.server", "--mcp"],
+   "cwd": "${workspaceFolder}",
+   "env": {
+    "NAKAMA_NAKAMA_CONSOLE_URL": "${input:nakama_url}",
+    "NAKAMA_NAKAMA_USERNAME": "${input:nakama_user}",
+    "NAKAMA_NAKAMA_PASSWORD": "${input:nakama_pass}",
+    "NAKAMA_NAKAMA_HTTP_KEY": "${input:nakama_key}"
+   }
+  }
+ },
+ "inputs": [
+  { "id": "nakama_url", "type": "promptString", "description": "Nakama Console URL" },
+  { "id": "nakama_user", "type": "promptString", "description": "Nakama Username" },
+  { "id": "nakama_pass", "type": "promptString", "description": "Nakama Password", "password": true },
+  { "id": "nakama_key", "type": "promptString", "description": "Nakama HTTP Key" }
+ ]
+}
+```
+
+**Alternative:** reference a workspace-local env file (if you prefer `.env` files):
+
+```json
+{
+ "servers": {
+  "nakama-console-mcp": {
+   "type": "stdio",
+   "command": "python",
+   "args": ["-m", "src.server", "--mcp"],
+   "cwd": "${workspaceFolder}",
+   "envFile": "${workspaceFolder}/.env.nakama"
+  }
+ }
+}
+```
+
+**Security note:** prefer using `inputs` (promptString) for secrets so VS Code stores them securely rather than checking secrets into source control. If you use an env file, keep it out of version control (add to `.gitignore`).
 
 ## Security
 
