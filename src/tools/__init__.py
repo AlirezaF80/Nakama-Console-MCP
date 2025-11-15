@@ -116,7 +116,7 @@ def register_all_tools(server, client: NakamaConsoleClient):
                 "type": "object",
                 "properties": {
                     "collection": {"type": "string", "description": "Filter by collection name"},
-                    "key": {"type": "string", "description": "Filter by key (supports % suffix for prefix search, e.g., 'level%')"},
+                    "key": {"type": "string", "description": "Filter by key (supports % suffix for prefix search, e.g., 'level%') (Optional, but collection is required if key is provided)"},
                     "user_id": {"type": "string", "description": "Filter by user/owner ID"},
                     "cursor": {"type": "string", "description": "Pagination cursor from previous response"},
                 },
