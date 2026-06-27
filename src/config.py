@@ -1,5 +1,7 @@
-import os
 from pathlib import Path
+from typing import Optional
+
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Get the project root directory (parent of src/)
@@ -22,11 +24,16 @@ class NakamaSettings(BaseSettings):
     nakama_http_key: str = "defaultkey"
 
     model_config = SettingsConfigDict(
-        env_file=str(ENV_FILE),
         env_prefix="NAKAMA_",
         env_file_encoding="utf-8",
     )
 
 
-def load_settings() -> NakamaSettings:
+def load_settings(env_file: Optional[Path] = None) -> NakamaSettings:
+    """Load settings from process env, optionally seeding from an env file first."""
+    candidates = [env_file, ENV_FILE]
+    for candidate in candidates:
+        if candidate and candidate.exists():
+            load_dotenv(candidate, override=True)
+            break
     return NakamaSettings()

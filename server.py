@@ -9,7 +9,7 @@ You may need to adapt the `mcp` calls depending on your MCP SDK version.
 import argparse
 import asyncio
 import logging
-import sys
+from pathlib import Path
 from typing import Any
 
 from src.config import load_settings
@@ -82,12 +82,18 @@ def parse_args():
     p.add_argument("--mcp", action="store_true", help="Run as MCP server (requires mcp SDK)")
     p.add_argument("--test", action="store_true", help="Run a CLI connectivity test (authenticate and list accounts)")
     p.add_argument("--limit", type=int, default=5, help="Number of accounts to show in --test mode")
+    p.add_argument(
+        "--env-file",
+        type=str,
+        help="Path to a .env file with NAKAMA_* credentials (used by Cursor project config)",
+    )
     return p.parse_args()
 
 
 def main():
     args = parse_args()
-    settings = load_settings()
+    env_file = Path(args.env_file) if args.env_file else None
+    settings = load_settings(env_file)
     if args.mcp:
         asyncio.run(run_mcp_server(settings))
         return

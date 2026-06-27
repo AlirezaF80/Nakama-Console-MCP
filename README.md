@@ -41,36 +41,30 @@ Place or update the `nakama-console-mcp` entry in your `mcp.json` (this is typic
 }
 ```
 
-**2. Per-workspace `.vscode/mcp.json` (recommended for project-specific configs)**
+**2. Per-workspace `.cursor/mcp.json` (Cursor — recommended for project-specific configs)**
 
-For project-specific configurations, add an `mcp.json` under the workspace's `.vscode/` folder. This keeps the configuration alongside the project and lets VS Code automatically start the correct MCP server for that workspace.
-
-Example that uses secure input variables (recommended):
+Cursor uses `.cursor/mcp.json` (not `.vscode/mcp.json`). STDIO servers require `"type": "stdio"`.
+Pass the project env file via `--env-file` with `${workspaceFolder}` interpolation (more reliable than `envFile` alone):
 
 ```json
 {
- "servers": {
-  "nakama-console-mcp": {
-   "type": "stdio",
-   "command": "python",
-   "args": ["-m", "src.server", "--mcp"],
-   "cwd": "${workspaceFolder}",
-   "env": {
-    "NAKAMA_NAKAMA_CONSOLE_URL": "${input:nakama_url}",
-    "NAKAMA_NAKAMA_USERNAME": "${input:nakama_user}",
-    "NAKAMA_NAKAMA_PASSWORD": "${input:nakama_pass}",
-    "NAKAMA_NAKAMA_HTTP_KEY": "${input:nakama_key}"
-   }
+  "mcpServers": {
+    "nakama-console-mcp": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "C:\\MCP Servers\\nakama-console-mcp\\server.py",
+        "--mcp",
+        "--env-file",
+        "${workspaceFolder}/.env.nakama"
+      ],
+      "cwd": "C:\\MCP Servers\\nakama-console-mcp"
+    }
   }
- },
- "inputs": [
-  { "id": "nakama_url", "type": "promptString", "description": "Nakama Console URL" },
-  { "id": "nakama_user", "type": "promptString", "description": "Nakama Username" },
-  { "id": "nakama_pass", "type": "promptString", "description": "Nakama Password", "password": true },
-  { "id": "nakama_key", "type": "promptString", "description": "Nakama HTTP Key" }
- ]
 }
 ```
+
+**VS Code** uses `.vscode/mcp.json` with a `"servers"` key instead of `"mcpServers"`.
 
 **Alternative:** reference a workspace-local env file (if you prefer `.env` files):
 
