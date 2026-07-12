@@ -1,5 +1,5 @@
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from src.pagination import DEFAULT_MAX_OBJECTS, MAX_OBJECTS_HARD_LIMIT
 
@@ -24,6 +24,12 @@ class ListStorageArgs(BaseModel):
     key: Optional[str] = None
     user_id: Optional[str] = None
     max_objects: int = Field(default=DEFAULT_MAX_OBJECTS, ge=1, le=MAX_OBJECTS_HARD_LIMIT)
+
+    @model_validator(mode="after")
+    def key_requires_collection(self):
+        if self.key is not None and self.collection is None:
+            raise ValueError("collection is required when key is provided")
+        return self
 
 
 class GetStorageObjectArgs(BaseModel):

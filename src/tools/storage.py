@@ -103,13 +103,7 @@ async def nakama_get_storage_objects(
 
     Returns { results, fetched, failed }.
     """
-    if not objects:
-        raise ValueError("objects must be a non-empty array")
-    if len(objects) > MAX_BATCH_OBJECTS:
-        raise ValueError(
-            f"objects batch size {len(objects)} exceeds max of {MAX_BATCH_OBJECTS}"
-        )
-
+    # Batch size / non-empty checks are enforced by GetStorageObjectsArgs in the dispatcher.
     semaphore = asyncio.Semaphore(BATCH_CONCURRENCY)
 
     async def fetch_one(item: Dict[str, str]) -> Dict[str, Any]:

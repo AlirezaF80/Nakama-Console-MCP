@@ -1,8 +1,40 @@
 """Tools package for Nakama Console MCP server."""
 
-from typing import Any, Awaitable, Callable, Dict
+from typing import Any, Dict, Type
+
+from pydantic import BaseModel, ValidationError
 
 from src.nakama_client import NakamaConsoleClient
+from src.models import (
+    GetAccountArgs,
+    GetStorageObjectArgs,
+    GetStorageObjectsArgs,
+    ListAccountsArgs,
+    ListStorageArgs,
+    ListStorageCollectionsArgs,
+)
+
+# tool_name -> Pydantic args model (GetAccountArgs reused for all id-only tools)
+_TOOL_ARG_MODELS: Dict[str, Type[BaseModel]] = {
+    "nakama_list_accounts": ListAccountsArgs,
+    "nakama_get_account": GetAccountArgs,
+    "nakama_export_account": GetAccountArgs,
+    "nakama_get_friends": GetAccountArgs,
+    "nakama_get_user_groups": GetAccountArgs,
+    "nakama_list_collections": ListStorageCollectionsArgs,
+    "nakama_list_storage": ListStorageArgs,
+    "nakama_get_storage_object": GetStorageObjectArgs,
+    "nakama_get_storage_objects": GetStorageObjectsArgs,
+}
+
+
+def _format_validation_error(exc: ValidationError) -> str:
+    parts = []
+    for err in exc.errors():
+        loc = ".".join(str(x) for x in err.get("loc", ()) if x != "body")
+        msg = err.get("msg", "invalid")
+        parts.append(f"{loc}: {msg}" if loc else msg)
+    return "; ".join(parts) if parts else str(exc)
 
 
 def register_all_tools(server, client: NakamaConsoleClient):
@@ -214,35 +246,41 @@ def register_all_tools(server, client: NakamaConsoleClient):
     async def _list_all_tools() -> list[mcp.Tool]:
         return tools
 
-    # Tool call dispatcher for all tools
+    # Tool call dispatcher for all tools.
+    # Exceptions propagate so the MCP SDK returns CallToolResult(isError=True).
     @server.call_tool()
     async def _call_tool(tool_name: str, arguments: Dict[str, Any]):
-        try:
-            # Account tools
-            if tool_name == "nakama_list_accounts":
-                return await _accounts.nakama_list_accounts(client, **arguments)
-            if tool_name == "nakama_get_account":
-                return await _accounts.nakama_get_account(client, **arguments)
-            if tool_name == "nakama_export_account":
-                return await _accounts.nakama_export_account(client, **arguments)
-            if tool_name == "nakama_get_friends":
-                return await _accounts.nakama_get_friends(client, **arguments)
-            if tool_name == "nakama_get_user_groups":
-                return await _accounts.nakama_get_user_groups(client, **arguments)
-            
-            # Storage tools
-            if tool_name == "nakama_list_collections":
-                return await _storage.nakama_list_collections(client)
-            if tool_name == "nakama_list_storage":
-                return await _storage.nakama_list_storage(client, **arguments)
-            if tool_name == "nakama_get_storage_object":
-                return await _storage.nakama_get_storage_object(client, **arguments)
-            if tool_name == "nakama_get_storage_objects":
-                return await _storage.nakama_get_storage_objects(client, **arguments)
+        model_cls = _TOOL_ARG_MODELS.get(tool_name)
+        if model_cls is None:
+            raise ValueError(f"Unknown tool: {tool_name}")
 
-            return {"error": f"Unknown tool: {tool_name}"}
-        except Exception as e:
-            return {"error": str(e)}
+        try:
+            validated = model_cls.model_validate(arguments or {})
+        except ValidationError as e:
+            raise ValueError(_format_validation_error(e)) from e
+
+        kwargs = validated.model_dump(exclude_none=True)
+
+        if tool_name == "nakama_list_accounts":
+            return await _accounts.nakama_list_accounts(client, **kwargs)
+        if tool_name == "nakama_get_account":
+            return await _accounts.nakama_get_account(client, **kwargs)
+        if tool_name == "nakama_export_account":
+            return await _accounts.nakama_export_account(client, **kwargs)
+        if tool_name == "nakama_get_friends":
+            return await _accounts.nakama_get_friends(client, **kwargs)
+        if tool_name == "nakama_get_user_groups":
+            return await _accounts.nakama_get_user_groups(client, **kwargs)
+        if tool_name == "nakama_list_collections":
+            return await _storage.nakama_list_collections(client)
+        if tool_name == "nakama_list_storage":
+            return await _storage.nakama_list_storage(client, **kwargs)
+        if tool_name == "nakama_get_storage_object":
+            return await _storage.nakama_get_storage_object(client, **kwargs)
+        if tool_name == "nakama_get_storage_objects":
+            return await _storage.nakama_get_storage_objects(client, **kwargs)
+
+        raise ValueError(f"Unknown tool: {tool_name}")
 
 
 # Keep old function names for backward compatibility (they just call the new one)
