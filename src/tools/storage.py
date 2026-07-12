@@ -4,9 +4,8 @@ import json
 from urllib.parse import quote
 
 from src.nakama_client import NakamaConsoleClient
-from src.pagination import DEFAULT_MAX_OBJECTS, fetch_pages
+from src.pagination import DEFAULT_MAX_OBJECTS, MAX_BATCH_OBJECTS, fetch_pages
 
-MAX_BATCH_OBJECTS = 50
 BATCH_CONCURRENCY = 10
 
 

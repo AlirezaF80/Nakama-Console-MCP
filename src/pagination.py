@@ -4,6 +4,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 DEFAULT_MAX_OBJECTS = 100
 MAX_OBJECTS_HARD_LIMIT = 1000
+MAX_BATCH_OBJECTS = 50
 
 FetchPage = Callable[[Optional[str]], Awaitable[Dict[str, Any]]]
 
@@ -72,6 +73,7 @@ async def fetch_pages(
 __all__ = [
     "DEFAULT_MAX_OBJECTS",
     "MAX_OBJECTS_HARD_LIMIT",
+    "MAX_BATCH_OBJECTS",
     "clamp_max_objects",
     "fetch_pages",
 ]

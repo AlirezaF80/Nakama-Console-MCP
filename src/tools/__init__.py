@@ -17,6 +17,7 @@ from src.models import (
     ListStorageCollectionsArgs,
     ListStorageEnvelope,
 )
+from src.pagination import DEFAULT_MAX_OBJECTS, MAX_BATCH_OBJECTS, MAX_OBJECTS_HARD_LIMIT
 
 # tool_name -> Pydantic args model (GetAccountArgs reused for all id-only tools)
 _TOOL_ARG_MODELS: Dict[str, Type[BaseModel]] = {
@@ -79,7 +80,8 @@ def register_all_tools(server, client: NakamaConsoleClient):
             title="List Nakama accounts",
             description=(
                 "List/filter accounts by username or user id. Prefer nakama_get_account for one known id. "
-                "Auto-paginates up to max_objects (default 100, max 1000); cursors stay internal. "
+                f"Auto-paginates up to max_objects (default {DEFAULT_MAX_OBJECTS}, "
+                f"max {MAX_OBJECTS_HARD_LIMIT}); cursors stay internal. "
                 "Response: users, total_count (approx), fetched, complete. "
                 "If complete is false, raise max_objects or narrow filter."
             ),
@@ -96,10 +98,13 @@ def register_all_tools(server, client: NakamaConsoleClient):
                     },
                     "max_objects": {
                         "type": "integer",
-                        "description": "Max accounts to return (default 100, hard max 1000)",
-                        "default": 100,
+                        "description": (
+                            f"Max accounts to return (default {DEFAULT_MAX_OBJECTS}, "
+                            f"hard max {MAX_OBJECTS_HARD_LIMIT})"
+                        ),
+                        "default": DEFAULT_MAX_OBJECTS,
                         "minimum": 1,
-                        "maximum": 1000,
+                        "maximum": MAX_OBJECTS_HARD_LIMIT,
                     },
                 },
             },
@@ -237,7 +242,7 @@ def register_all_tools(server, client: NakamaConsoleClient):
                 "List storage objects (filters: collection, key with % prefix, user_id). "
                 "Metadata only — no values. Auto-paginates up to max_objects. "
                 "Response: objects, total_count (approx), fetched, complete. "
-                "If complete is false, raise max_objects (max 1000) or narrow filters. "
+                f"If complete is false, raise max_objects (max {MAX_OBJECTS_HARD_LIMIT}) or narrow filters. "
                 "Load values via nakama_get_storage_objects (batch) or nakama_get_storage_object."
             ),
             inputSchema={
@@ -260,10 +265,13 @@ def register_all_tools(server, client: NakamaConsoleClient):
                     },
                     "max_objects": {
                         "type": "integer",
-                        "description": "Max objects to return (default 100, hard max 1000)",
-                        "default": 100,
+                        "description": (
+                            f"Max objects to return (default {DEFAULT_MAX_OBJECTS}, "
+                            f"hard max {MAX_OBJECTS_HARD_LIMIT})"
+                        ),
+                        "default": DEFAULT_MAX_OBJECTS,
                         "minimum": 1,
-                        "maximum": 1000,
+                        "maximum": MAX_OBJECTS_HARD_LIMIT,
                     },
                 },
             },
@@ -310,7 +318,7 @@ def register_all_tools(server, client: NakamaConsoleClient):
             name="nakama_get_storage_objects",
             title="Get Nakama storage objects (batch)",
             description=(
-                "Batch-fetch storage objects by collection/key/user_id (1–50). "
+                f"Batch-fetch storage objects by collection/key/user_id (1–{MAX_BATCH_OBJECTS}). "
                 "Use after nakama_list_storage to load values. "
                 "Response: results (input order; ok+object or ok+error), fetched, failed. "
                 "Per-item failures do not abort the batch."
@@ -320,9 +328,9 @@ def register_all_tools(server, client: NakamaConsoleClient):
                 "properties": {
                     "objects": {
                         "type": "array",
-                        "description": "Storage object ids to fetch (1–50)",
+                        "description": f"Storage object ids to fetch (1–{MAX_BATCH_OBJECTS})",
                         "minItems": 1,
-                        "maxItems": 50,
+                        "maxItems": MAX_BATCH_OBJECTS,
                         "items": {
                             "type": "object",
                             "properties": {
@@ -394,15 +402,4 @@ def register_all_tools(server, client: NakamaConsoleClient):
         raise ValueError(f"Unknown tool: {tool_name}")
 
 
-# Keep old function names for backward compatibility (they just call the new one)
-def register_account_tools(server, client: NakamaConsoleClient):
-    """Deprecated: Use register_all_tools() instead."""
-    pass  # No-op, tools are registered by register_all_tools()
-
-
-def register_storage_tools(server, client: NakamaConsoleClient):
-    """Deprecated: Use register_all_tools() instead."""
-    pass  # No-op, tools are registered by register_all_tools()
-
-
-__all__ = ["register_all_tools", "register_account_tools", "register_storage_tools"]
+__all__ = ["register_all_tools"]

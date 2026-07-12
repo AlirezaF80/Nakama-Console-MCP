@@ -26,16 +26,20 @@ class NakamaConsoleClient:
         self._client = httpx.AsyncClient(timeout=timeout)
         self._lock = asyncio.Lock()
 
-    async def authenticate(self) -> str:
-        """Authenticate the console user and store the JWT token."""
+    async def authenticate(self, *, force: bool = False) -> str:
+        """Authenticate the console user and store the JWT token.
+
+        When force is True, ignore any cached token and fetch a new one
+        (used after a 401 to reauth).
+        """
         async with self._lock:
-            if self._token:
+            if self._token and not force:
                 return self._token
             url = f"{self.base_url}/v2/console/authenticate"
             payload = {"username": self.settings.nakama_username, "password": self.settings.nakama_password}
             try:
                 resp = await self._client.post(url, json=payload)
-            except Exception as e:
+            except Exception:
                 logger.exception("Failed to reach Nakama Console authenticate endpoint")
                 raise
             if resp.status_code != 200:
@@ -55,33 +59,38 @@ class NakamaConsoleClient:
             headers["Authorization"] = f"Bearer {self._token}"
         return headers
 
-    async def get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Any:
-        """GET request with automatic authentication and retry on 401 once."""
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: Optional[Dict[str, Any]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+    ) -> Any:
+        """HTTP request with automatic authentication and retry on 401 once."""
         url = path if path.startswith("http") else f"{self.base_url}{path}"
-        headers = self._auth_headers()
-        resp = await self._client.get(url, params=params or {}, headers=headers)
+        kwargs: Dict[str, Any] = {"headers": self._auth_headers()}
+        if params is not None:
+            kwargs["params"] = params
+        if json_data is not None:
+            kwargs["json"] = json_data
+
+        resp = await self._client.request(method, url, **kwargs)
         if resp.status_code == 401:
-            # try reauth once
-            logger.info("Token unauthorized, reauthenticating and retrying GET %s", path)
-            await self.authenticate()
-            headers = self._auth_headers()
-            resp = await self._client.get(url, params=params or {}, headers=headers)
+            logger.info("Token unauthorized, reauthenticating and retrying %s %s", method, path)
+            await self.authenticate(force=True)
+            kwargs["headers"] = self._auth_headers()
+            resp = await self._client.request(method, url, **kwargs)
         resp.raise_for_status()
         return resp.json()
 
+    async def get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Any:
+        """GET request with automatic authentication and retry on 401 once."""
+        return await self._request("GET", path, params=params or {})
+
     async def post(self, path: str, json_data: Optional[Dict[str, Any]] = None) -> Any:
         """POST request with automatic authentication and retry on 401 once."""
-        url = path if path.startswith("http") else f"{self.base_url}{path}"
-        headers = self._auth_headers()
-        resp = await self._client.post(url, json=json_data or {}, headers=headers)
-        if resp.status_code == 401:
-            # try reauth once
-            logger.info("Token unauthorized, reauthenticating and retrying POST %s", path)
-            await self.authenticate()
-            headers = self._auth_headers()
-            resp = await self._client.post(url, json=json_data or {}, headers=headers)
-        resp.raise_for_status()
-        return resp.json()
+        return await self._request("POST", path, json_data=json_data or {})
 
     async def close(self) -> None:
         await self._client.aclose()

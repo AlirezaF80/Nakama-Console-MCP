@@ -2,7 +2,7 @@ from typing import Any, List, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
-from src.pagination import DEFAULT_MAX_OBJECTS, MAX_OBJECTS_HARD_LIMIT
+from src.pagination import DEFAULT_MAX_OBJECTS, MAX_BATCH_OBJECTS, MAX_OBJECTS_HARD_LIMIT
 
 
 class ListAccountsArgs(BaseModel):
@@ -46,8 +46,7 @@ class StorageObjectId(BaseModel):
 
 
 class GetStorageObjectsArgs(BaseModel):
-    # Keep in sync with MAX_BATCH_OBJECTS in src.tools.storage
-    objects: List[StorageObjectId] = Field(min_length=1, max_length=50)
+    objects: List[StorageObjectId] = Field(min_length=1, max_length=MAX_BATCH_OBJECTS)
 
 
 # --- Response envelopes (MCP outputSchema) ---
