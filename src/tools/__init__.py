@@ -10,9 +10,12 @@ from src.models import (
     GetAccountArgs,
     GetStorageObjectArgs,
     GetStorageObjectsArgs,
+    GetStorageObjectsEnvelope,
     ListAccountsArgs,
+    ListAccountsEnvelope,
     ListStorageArgs,
     ListStorageCollectionsArgs,
+    ListStorageEnvelope,
 )
 
 # tool_name -> Pydantic args model (GetAccountArgs reused for all id-only tools)
@@ -43,6 +46,11 @@ def _format_validation_error(exc: ValidationError) -> str:
         msg = err.get("msg", "invalid")
         parts.append(f"{loc}: {msg}" if loc else msg)
     return "; ".join(parts) if parts else str(exc)
+
+
+def _output_schema(model: Type[BaseModel]) -> Dict[str, Any]:
+    """JSON Schema for MCP Tool.outputSchema from a Pydantic envelope model."""
+    return model.model_json_schema()
 
 
 def register_all_tools(server, client: NakamaConsoleClient):
@@ -95,7 +103,7 @@ def register_all_tools(server, client: NakamaConsoleClient):
                     },
                 },
             },
-            outputSchema=None,
+            outputSchema=_output_schema(ListAccountsEnvelope),
             annotations=_READONLY_ANNOTATIONS,
         )
     )
@@ -259,7 +267,7 @@ def register_all_tools(server, client: NakamaConsoleClient):
                     },
                 },
             },
-            outputSchema=None,
+            outputSchema=_output_schema(ListStorageEnvelope),
             annotations=_READONLY_ANNOTATIONS,
         )
     )
@@ -337,7 +345,7 @@ def register_all_tools(server, client: NakamaConsoleClient):
                 },
                 "required": ["objects"],
             },
-            outputSchema=None,
+            outputSchema=_output_schema(GetStorageObjectsEnvelope),
             annotations=_READONLY_ANNOTATIONS,
         )
     )

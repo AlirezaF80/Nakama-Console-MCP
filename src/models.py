@@ -1,4 +1,5 @@
-from typing import List, Optional
+from typing import Any, List, Optional
+
 from pydantic import BaseModel, Field, model_validator
 
 from src.pagination import DEFAULT_MAX_OBJECTS, MAX_OBJECTS_HARD_LIMIT
@@ -49,6 +50,50 @@ class GetStorageObjectsArgs(BaseModel):
     objects: List[StorageObjectId] = Field(min_length=1, max_length=50)
 
 
+# --- Response envelopes (MCP outputSchema) ---
+
+
+class ListAccountsEnvelope(BaseModel):
+    users: list[dict[str, Any]] = Field(description="Account user objects from Nakama")
+    total_count: int = Field(description="Approximate total matching accounts")
+    fetched: int = Field(description="Number of users returned in this response")
+    complete: bool = Field(
+        description="True if all matching users were returned within max_objects"
+    )
+
+
+class ListStorageEnvelope(BaseModel):
+    objects: list[dict[str, Any]] = Field(
+        description="Storage object metadata only (no values)"
+    )
+    total_count: int = Field(description="Approximate total matching storage objects")
+    fetched: int = Field(description="Number of objects returned in this response")
+    complete: bool = Field(
+        description="True if all matching objects were returned within max_objects"
+    )
+
+
+class StorageBatchResultItem(BaseModel):
+    collection: str = Field(description="Collection name")
+    key: str = Field(description="Storage object key")
+    user_id: str = Field(description="User/owner ID")
+    ok: bool = Field(description="True if the object was fetched successfully")
+    object: Optional[dict[str, Any]] = Field(
+        default=None, description="Full storage object when ok is true"
+    )
+    error: Optional[str] = Field(
+        default=None, description="Error message when ok is false"
+    )
+
+
+class GetStorageObjectsEnvelope(BaseModel):
+    results: list[StorageBatchResultItem] = Field(
+        description="Per-item results in input order"
+    )
+    fetched: int = Field(description="Count of successful fetches")
+    failed: int = Field(description="Count of failed fetches")
+
+
 __all__ = [
     "ListAccountsArgs",
     "GetAccountArgs",
@@ -57,4 +102,8 @@ __all__ = [
     "GetStorageObjectArgs",
     "StorageObjectId",
     "GetStorageObjectsArgs",
+    "ListAccountsEnvelope",
+    "ListStorageEnvelope",
+    "StorageBatchResultItem",
+    "GetStorageObjectsEnvelope",
 ]
