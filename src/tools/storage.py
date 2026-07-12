@@ -3,6 +3,7 @@ import json
 from urllib.parse import quote
 
 from src.nakama_client import NakamaConsoleClient
+from src.pagination import DEFAULT_MAX_OBJECTS, fetch_pages
 
 
 async def nakama_list_collections(client: NakamaConsoleClient):
@@ -18,29 +19,34 @@ async def nakama_list_storage(
     collection: Optional[str] = None,
     key: Optional[str] = None,
     user_id: Optional[str] = None,
-    cursor: Optional[str] = None,
+    max_objects: int = DEFAULT_MAX_OBJECTS,
 ):
-    """List storage objects with optional filtering and pagination.
+    """List storage objects with optional filtering; auto-paginates up to max_objects.
 
     Parameters:
         collection: Filter by collection name
-        key: Filter by key (supports % suffix for prefix search, e.g., 'level%') (Optional, but collection is required if key is provided)
+        key: Filter by key (supports % suffix for prefix search, e.g., 'level%')
+            (Optional, but collection is required if key is provided)
         user_id: Filter by user/owner ID
-        cursor: Pagination cursor from previous response
+        max_objects: Max objects to return (default 100, hard max 1000)
 
-    Returns storage objects with metadata (collection, key, user_id, version,
-    permissions, timestamps) and a next_cursor for pagination.
+    Returns an envelope with objects (metadata only), total_count (approximate),
+    fetched, and complete. Raise max_objects or narrow filters if complete is false.
     """
-    params = {}
-    if collection is not None:
-        params["collection"] = collection
-        if key is not None:
-            params["key"] = key
-    if user_id is not None:
-        params["user_id"] = user_id
-    if cursor is not None:
-        params["cursor"] = cursor
-    return await client.get("/v2/console/storage", params=params)
+
+    async def fetch_page(cursor: Optional[str]):
+        params = {}
+        if collection is not None:
+            params["collection"] = collection
+            if key is not None:
+                params["key"] = key
+        if user_id is not None:
+            params["user_id"] = user_id
+        if cursor is not None:
+            params["cursor"] = cursor
+        return await client.get("/v2/console/storage", params=params)
+
+    return await fetch_pages(fetch_page, items_key="objects", max_objects=max_objects)
 
 
 async def nakama_get_storage_object(

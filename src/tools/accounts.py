@@ -1,22 +1,32 @@
 from typing import Optional
 
 from src.nakama_client import NakamaConsoleClient
-from src.models import ListAccountsArgs, GetAccountArgs
+from src.pagination import DEFAULT_MAX_OBJECTS, fetch_pages
 
 
-async def nakama_list_accounts(client: NakamaConsoleClient, filter: Optional[str] = None, tombstones: Optional[bool] = None, cursor: Optional[str] = None):
-    """List accounts (wrapper around GET /v2/console/account).
+async def nakama_list_accounts(
+    client: NakamaConsoleClient,
+    filter: Optional[str] = None,
+    tombstones: Optional[bool] = None,
+    max_objects: int = DEFAULT_MAX_OBJECTS,
+):
+    """List accounts; auto-paginates up to max_objects.
 
-    Parameters mirror the Nakama Console API.
+    Parameters mirror the Nakama Console API filters, plus max_objects.
+    Returns an envelope with users, total_count (approximate), fetched, and complete.
     """
-    params = {}
-    if filter is not None:
-        params["filter"] = filter
-    if tombstones is not None:
-        params["tombstones"] = str(tombstones).lower()
-    if cursor is not None:
-        params["cursor"] = cursor
-    return await client.get("/v2/console/account", params=params)
+
+    async def fetch_page(cursor: Optional[str]):
+        params = {}
+        if filter is not None:
+            params["filter"] = filter
+        if tombstones is not None:
+            params["tombstones"] = str(tombstones).lower()
+        if cursor is not None:
+            params["cursor"] = cursor
+        return await client.get("/v2/console/account", params=params)
+
+    return await fetch_pages(fetch_page, items_key="users", max_objects=max_objects)
 
 
 async def nakama_get_account(client: NakamaConsoleClient, id: str):

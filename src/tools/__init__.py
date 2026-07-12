@@ -29,13 +29,23 @@ def register_all_tools(server, client: NakamaConsoleClient):
         mcp.Tool(
             name="nakama_list_accounts",
             title="List Nakama accounts",
-            description="List or filter Nakama accounts",
+            description=(
+                "List or filter Nakama accounts. Auto-paginates up to max_objects. "
+                "Response: users, total_count (approximate), fetched, complete. "
+                "If complete is false, raise max_objects (max 1000) or narrow the filter."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "filter": {"type": "string"},
-                    "tombstones": {"type": "boolean"},
-                    "cursor": {"type": "string"},
+                    "filter": {"type": "string", "description": "User ID or username filter"},
+                    "tombstones": {"type": "boolean", "description": "Search only recorded deletes"},
+                    "max_objects": {
+                        "type": "integer",
+                        "description": "Max accounts to return (default 100, hard max 1000)",
+                        "default": 100,
+                        "minimum": 1,
+                        "maximum": 1000,
+                    },
                 },
             },
             outputSchema=None,
@@ -111,14 +121,31 @@ def register_all_tools(server, client: NakamaConsoleClient):
         mcp.Tool(
             name="nakama_list_storage",
             title="List Nakama storage objects",
-            description="List storage objects with optional filters (collection, key with % prefix search, user_id) and pagination cursor",
+            description=(
+                "List storage objects with optional filters (collection, key with % prefix search, user_id). "
+                "Auto-paginates up to max_objects. Response: objects (metadata only), total_count "
+                "(approximate), fetched, complete. If complete is false, raise max_objects (max 1000) "
+                "or narrow filters. Use total_count for approximate totals without fetching all keys."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "collection": {"type": "string", "description": "Filter by collection name"},
-                    "key": {"type": "string", "description": "Filter by key (supports % suffix for prefix search, e.g., 'level%') (Optional, but collection is required if key is provided)"},
+                    "key": {
+                        "type": "string",
+                        "description": (
+                            "Filter by key (supports % suffix for prefix search, e.g., 'level%'). "
+                            "Optional, but collection is required if key is provided"
+                        ),
+                    },
                     "user_id": {"type": "string", "description": "Filter by user/owner ID"},
-                    "cursor": {"type": "string", "description": "Pagination cursor from previous response"},
+                    "max_objects": {
+                        "type": "integer",
+                        "description": "Max objects to return (default 100, hard max 1000)",
+                        "default": 100,
+                        "minimum": 1,
+                        "maximum": 1000,
+                    },
                 },
             },
             outputSchema=None,

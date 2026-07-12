@@ -84,6 +84,19 @@ Pass the project env file via `--env-file` with `${workspaceFolder}` interpolati
 
 **Security note:** prefer using `inputs` (promptString) for secrets so VS Code stores them securely rather than checking secrets into source control. If you use an env file, keep it out of version control (add to `.gitignore`).
 
+## List tools (auto-pagination)
+
+`nakama_list_accounts` and `nakama_list_storage` auto-paginate Console pages up to `max_objects` (default **100**, hard max **1000**). Agents never pass or receive cursors.
+
+Response envelope:
+
+- `users` / `objects` — items returned this call
+- `total_count` — approximate total matching the filter (from Nakama)
+- `fetched` — number of items in this response
+- `complete` — `true` if all matches were returned; if `false`, raise `max_objects` or narrow filters
+
+Use `total_count` when you only need an approximate size without fetching every key.
+
 ## Security
 
 - This project is read-only for now, and will not perform any write/delete operations on the Nakama server.
