@@ -171,6 +171,42 @@ def register_all_tools(server, client: NakamaConsoleClient):
         )
     )
 
+    # nakama_get_storage_objects
+    tools.append(
+        mcp.Tool(
+            name="nakama_get_storage_objects",
+            title="Get Nakama storage objects (batch)",
+            description=(
+                "Fetch multiple storage objects by collection/key/user_id in one call (max 50). "
+                "After nakama_list_storage, pass selected ids here to load values. "
+                "Response: results (input order; each ok+object or ok+error), fetched, failed. "
+                "Per-item failures do not abort the batch."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "objects": {
+                        "type": "array",
+                        "description": "Storage object ids to fetch (1–50)",
+                        "minItems": 1,
+                        "maxItems": 50,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "collection": {"type": "string", "description": "Collection name"},
+                                "key": {"type": "string", "description": "Storage object key"},
+                                "user_id": {"type": "string", "description": "User/owner ID"},
+                            },
+                            "required": ["collection", "key", "user_id"],
+                        },
+                    },
+                },
+                "required": ["objects"],
+            },
+            outputSchema=None,
+        )
+    )
+
     # ==================== REGISTRATION ====================
     
     # register list_tools handler to populate server._tool_cache
@@ -201,6 +237,8 @@ def register_all_tools(server, client: NakamaConsoleClient):
                 return await _storage.nakama_list_storage(client, **arguments)
             if tool_name == "nakama_get_storage_object":
                 return await _storage.nakama_get_storage_object(client, **arguments)
+            if tool_name == "nakama_get_storage_objects":
+                return await _storage.nakama_get_storage_objects(client, **arguments)
 
             return {"error": f"Unknown tool: {tool_name}"}
         except Exception as e:

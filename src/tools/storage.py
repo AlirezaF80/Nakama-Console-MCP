@@ -1,9 +1,13 @@
-from typing import Optional
+from typing import Any, Dict, List, Optional, Sequence
+import asyncio
 import json
 from urllib.parse import quote
 
 from src.nakama_client import NakamaConsoleClient
 from src.pagination import DEFAULT_MAX_OBJECTS, fetch_pages
+
+MAX_BATCH_OBJECTS = 50
+BATCH_CONCURRENCY = 10
 
 
 async def nakama_list_collections(client: NakamaConsoleClient):
@@ -49,6 +53,34 @@ async def nakama_list_storage(
     return await fetch_pages(fetch_page, items_key="objects", max_objects=max_objects)
 
 
+def _encode_path_segment(segment: str) -> str:
+    return quote(segment, safe="")
+
+
+def _decode_storage_value(obj: Any) -> Any:
+    """JSON-decode the storage object's value field when it is a JSON string."""
+    value = obj.get("value") if isinstance(obj, dict) else None
+    if isinstance(value, str):
+        try:
+            obj["value"] = json.loads(value)
+        except Exception:
+            pass
+    return obj
+
+
+async def _get_storage_object(
+    client: NakamaConsoleClient, collection: str, key: str, user_id: str
+) -> Any:
+    """GET one storage object and decode JSON value when applicable."""
+    path = "/v2/console/storage/{}/{}/{}".format(
+        _encode_path_segment(collection),
+        _encode_path_segment(key),
+        _encode_path_segment(user_id),
+    )
+    obj = await client.get(path)
+    return _decode_storage_value(obj)
+
+
 async def nakama_get_storage_object(
     client: NakamaConsoleClient, collection: str, key: str, user_id: str
 ):
@@ -57,33 +89,51 @@ async def nakama_get_storage_object(
     Returns the full storage object (matching the console REST shape) and
     attempts to JSON-decode the "value" field when it's a JSON string.
     """
+    return await _get_storage_object(client, collection, key, user_id)
 
-    # The console exposes a convenience endpoint:
-    # /v2/console/storage/{collection}/{key}/{user_id}
-    # Make sure each segment is URL-encoded so unusual characters work.
-    def _encode(segment: str) -> str:
-        return quote(segment, safe="")
 
-    path = "/v2/console/storage/{}/{}/{}".format(
-        _encode(collection), _encode(key), _encode(user_id)
-    )
+async def nakama_get_storage_objects(
+    client: NakamaConsoleClient,
+    objects: Sequence[Dict[str, str]],
+):
+    """Fetch multiple storage objects concurrently (max 50).
 
-    obj = await client.get(path)
+    Each entry must include collection, key, and user_id. Results stay in input
+    order. Per-item failures do not abort the batch.
 
-    # If the storage object's value is a JSON-encoded string, parse it for convenience.
-    value = obj.get("value") if isinstance(obj, dict) else None
-    if isinstance(value, str):
+    Returns { results, fetched, failed }.
+    """
+    if not objects:
+        raise ValueError("objects must be a non-empty array")
+    if len(objects) > MAX_BATCH_OBJECTS:
+        raise ValueError(
+            f"objects batch size {len(objects)} exceeds max of {MAX_BATCH_OBJECTS}"
+        )
+
+    semaphore = asyncio.Semaphore(BATCH_CONCURRENCY)
+
+    async def fetch_one(item: Dict[str, str]) -> Dict[str, Any]:
+        collection = item.get("collection", "")
+        key = item.get("key", "")
+        user_id = item.get("user_id", "")
+        base = {"collection": collection, "key": key, "user_id": user_id}
         try:
-            obj["value"] = json.loads(value)
-        except Exception:
-            # leave as string if not JSON
-            pass
+            async with semaphore:
+                obj = await _get_storage_object(client, collection, key, user_id)
+            return {**base, "ok": True, "object": obj}
+        except Exception as e:
+            return {**base, "ok": False, "error": str(e)}
 
-    return obj
+    results = list(await asyncio.gather(*(fetch_one(item) for item in objects)))
+    fetched = sum(1 for r in results if r.get("ok"))
+    failed = len(results) - fetched
+    return {"results": results, "fetched": fetched, "failed": failed}
 
 
 __all__ = [
+    "MAX_BATCH_OBJECTS",
     "nakama_list_collections",
     "nakama_list_storage",
     "nakama_get_storage_object",
+    "nakama_get_storage_objects",
 ]

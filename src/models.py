@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from src.pagination import DEFAULT_MAX_OBJECTS, MAX_OBJECTS_HARD_LIMIT
@@ -32,10 +32,23 @@ class GetStorageObjectArgs(BaseModel):
     user_id: str
 
 
+class StorageObjectId(BaseModel):
+    collection: str
+    key: str
+    user_id: str
+
+
+class GetStorageObjectsArgs(BaseModel):
+    # Keep in sync with MAX_BATCH_OBJECTS in src.tools.storage
+    objects: List[StorageObjectId] = Field(min_length=1, max_length=50)
+
+
 __all__ = [
     "ListAccountsArgs",
     "GetAccountArgs",
     "ListStorageCollectionsArgs",
     "ListStorageArgs",
     "GetStorageObjectArgs",
+    "StorageObjectId",
+    "GetStorageObjectsArgs",
 ]
