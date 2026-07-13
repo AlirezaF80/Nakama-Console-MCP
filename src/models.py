@@ -1,23 +1,30 @@
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.pagination import (
     DEFAULT_MAX_OBJECTS,
-    MAX_BATCH_INPUT,
+    MAX_BATCH_OBJECTS,
     MAX_OBJECTS_HARD_LIMIT,
 )
+from src.response_format import DEFAULT_VALUE_PREVIEW_CHARS, MAX_VALUE_PREVIEW_CHARS
 from src.validation import key_prefix_to_filter, validate_storage_key_filter
 
 
 class ListAccountsArgs(BaseModel):
     filter: Optional[str] = None
     tombstones: Optional[bool] = None
+    cursor: Optional[str] = None
     max_objects: int = Field(default=DEFAULT_MAX_OBJECTS, ge=1, le=MAX_OBJECTS_HARD_LIMIT)
 
 
 class GetAccountArgs(BaseModel):
     id: str
+
+
+class ExportAccountArgs(BaseModel):
+    id: str
+    response_mode: Literal["inline", "resource", "auto"] = "auto"
 
 
 class ListStorageCollectionsArgs(BaseModel):
@@ -34,6 +41,7 @@ class ListStorageArgs(BaseModel):
     collection: Optional[str] = None
     key: Optional[str] = None
     user_id: Optional[str] = None
+    cursor: Optional[str] = None
     max_objects: int = Field(default=DEFAULT_MAX_OBJECTS, ge=1, le=MAX_OBJECTS_HARD_LIMIT)
 
     @model_validator(mode="after")
@@ -49,6 +57,7 @@ class ListUserStorageArgs(BaseModel):
     user_id: str
     collection: Optional[str] = None
     key_prefix: Optional[str] = None
+    cursor: Optional[str] = None
     max_objects: int = Field(default=DEFAULT_MAX_OBJECTS, ge=1, le=MAX_OBJECTS_HARD_LIMIT)
 
     @model_validator(mode="after")
@@ -62,6 +71,7 @@ class ListStorageKeysArgs(BaseModel):
     collection: str
     user_id: Optional[str] = None
     key_prefix: Optional[str] = None
+    cursor: Optional[str] = None
     max_objects: int = Field(default=DEFAULT_MAX_OBJECTS, ge=1, le=MAX_OBJECTS_HARD_LIMIT)
 
     @model_validator(mode="after")
@@ -75,6 +85,12 @@ class GetStorageObjectArgs(BaseModel):
     collection: str
     key: str
     user_id: str
+    include_value: bool = True
+    max_value_chars: int = Field(
+        default=DEFAULT_VALUE_PREVIEW_CHARS,
+        ge=0,
+        le=MAX_VALUE_PREVIEW_CHARS,
+    )
 
 
 class StorageObjectId(BaseModel):
@@ -84,7 +100,13 @@ class StorageObjectId(BaseModel):
 
 
 class GetStorageObjectsArgs(BaseModel):
-    objects: List[StorageObjectId] = Field(min_length=1, max_length=MAX_BATCH_INPUT)
+    objects: List[StorageObjectId] = Field(min_length=1, max_length=MAX_BATCH_OBJECTS)
+    include_value: bool = True
+    max_value_chars: int = Field(
+        default=DEFAULT_VALUE_PREVIEW_CHARS,
+        ge=0,
+        le=MAX_VALUE_PREVIEW_CHARS,
+    )
 
 
 # --- Response envelopes (MCP outputSchema) ---
@@ -96,6 +118,9 @@ class ListAccountsEnvelope(BaseModel):
     fetched: int = Field(description="Number of users returned in this response")
     complete: bool = Field(
         description="True if all matching users were returned within max_objects"
+    )
+    next_cursor: Optional[str] = Field(
+        default=None, description="Opaque cursor for the next page when complete is false"
     )
     hint: Optional[str] = Field(
         default=None, description="Suggested next step or narrowing advice"
@@ -111,6 +136,9 @@ class ListStorageEnvelope(BaseModel):
     complete: bool = Field(
         description="True if all matching objects were returned within max_objects"
     )
+    next_cursor: Optional[str] = Field(
+        default=None, description="Opaque cursor for the next page when complete is false"
+    )
     hint: Optional[str] = Field(
         default=None, description="Suggested next step or narrowing advice"
     )
@@ -124,6 +152,9 @@ class ListStorageKeysEnvelope(BaseModel):
     fetched: int = Field(description="Number of keys returned in this response")
     complete: bool = Field(
         description="True if all matching keys were returned within max_objects"
+    )
+    next_cursor: Optional[str] = Field(
+        default=None, description="Opaque cursor for the next page when complete is false"
     )
     hint: Optional[str] = Field(
         default=None, description="Suggested next step or narrowing advice"
@@ -147,8 +178,6 @@ class GetStorageObjectsEnvelope(BaseModel):
     results: list[StorageBatchResultItem] = Field(
         description="Per-item results in input order"
     )
-    requested: int = Field(description="Number of object ids in the request")
-    chunks: int = Field(description="Number of internal batches processed")
     fetched: int = Field(description="Count of successful fetches")
     failed: int = Field(description="Count of failed fetches")
 
@@ -179,6 +208,15 @@ class StorageObjectEnvelope(BaseModel):
     key: Optional[str] = Field(default=None, description="Storage object key")
     user_id: Optional[str] = Field(default=None, description="User/owner ID")
     value: Optional[Any] = Field(default=None, description="Decoded storage value when JSON")
+    value_preview: Optional[str] = Field(
+        default=None, description="Truncated JSON preview when value is large"
+    )
+    value_truncated: Optional[bool] = Field(
+        default=None, description="True when value was truncated to value_preview"
+    )
+    value_bytes: Optional[int] = Field(
+        default=None, description="Original UTF-8 byte length when truncated"
+    )
     version: Optional[str] = Field(default=None, description="Object version hash")
     permission_read: Optional[int] = Field(default=None, description="Read permission level")
     permission_write: Optional[int] = Field(default=None, description="Write permission level")
@@ -199,8 +237,21 @@ class AccountEnvelope(BaseModel):
 class ExportAccountEnvelope(BaseModel):
     model_config = ConfigDict(extra="allow")
 
+    response_mode: Optional[str] = Field(
+        default=None, description="inline or resource depending on response_mode argument"
+    )
+    resource_uri: Optional[str] = Field(
+        default=None, description="MCP resource URI when response_mode is resource"
+    )
+    summary: Optional[dict[str, int]] = Field(
+        default=None, description="Section counts when response_mode is resource"
+    )
+    hint: Optional[str] = Field(default=None, description="How to read a resource export")
     account: Optional[dict[str, Any]] = Field(default=None, description="Account record")
     storage: Optional[list[dict[str, Any]]] = Field(default=None, description="Storage objects")
+    objects: Optional[list[dict[str, Any]]] = Field(
+        default=None, description="Storage objects (Nakama export field name)"
+    )
     friends: Optional[list[dict[str, Any]]] = Field(default=None, description="Friends")
     groups: Optional[list[dict[str, Any]]] = Field(default=None, description="Groups")
     messages: Optional[list[dict[str, Any]]] = Field(default=None, description="Messages")
@@ -212,6 +263,9 @@ class ExportAccountEnvelope(BaseModel):
     )
     wallet_ledger: Optional[list[dict[str, Any]]] = Field(
         default=None, description="Wallet ledger entries"
+    )
+    wallet_ledgers: Optional[list[dict[str, Any]]] = Field(
+        default=None, description="Wallet ledger entries (Nakama export field name)"
     )
 
 
@@ -232,6 +286,7 @@ class UserGroupsEnvelope(BaseModel):
 __all__ = [
     "ListAccountsArgs",
     "GetAccountArgs",
+    "ExportAccountArgs",
     "ListStorageCollectionsArgs",
     "StatusArgs",
     "ListStorageArgs",

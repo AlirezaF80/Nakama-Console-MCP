@@ -45,4 +45,34 @@ def key_prefix_to_filter(key_prefix: Optional[str]) -> Optional[str]:
     return validate_storage_key_filter(prefix)
 
 
-__all__ = ["validate_storage_key_filter", "key_prefix_to_filter"]
+def _is_prefix_key(key: Optional[str]) -> bool:
+    return bool(key and key.endswith("%") and key.count("%") == 1)
+
+
+def validate_storage_list_cursor(
+    *,
+    collection: Optional[str],
+    key: Optional[str],
+    user_id: Optional[str],
+    cursor: Optional[str],
+) -> None:
+    """Reject cursor/filter combos Nakama Console disallows."""
+    if not cursor:
+        return
+
+    if user_id and not collection and not key:
+        raise ValueError(
+            "Cursor not allowed when filter only contains user ID. Add collection to narrow scope."
+        )
+
+    if user_id and collection and key and not _is_prefix_key(key):
+        raise ValueError(
+            "Cursor not allowed when filter only contains collection, key, and user_id."
+        )
+
+
+__all__ = [
+    "validate_storage_key_filter",
+    "key_prefix_to_filter",
+    "validate_storage_list_cursor",
+]

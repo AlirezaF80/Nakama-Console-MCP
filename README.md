@@ -34,17 +34,35 @@ Use `--env-file path/to/.env` when the MCP client should load credentials from a
 | `nakama_status` | Console URL you're connected to + node health |
 | `nakama_list_accounts` | List or filter accounts by username or user id |
 | `nakama_get_account` | One account: profile, devices, wallet, metadata |
-| `nakama_export_account` | Full dump (storage, friends, groups, messages, leaderboards, ...) |
+| `nakama_export_account` | Full dump; `response_mode=auto\|resource\|inline` (large → MCP resource link) |
 | `nakama_get_friends` | Friend list for a user |
 | `nakama_get_user_groups` | Groups a user belongs to |
 | `nakama_list_collections` | Storage collection names |
 | `nakama_list_storage` | Storage metadata; filter by collection, key prefix, or user_id |
 | `nakama_list_user_storage` | Storage metadata for one user |
 | `nakama_list_storage_keys` | Keys only, no values |
-| `nakama_get_storage_object` | One object by collection / key / user_id |
-| `nakama_get_storage_objects` | Batch fetch; chunks internally |
+| `nakama_get_storage_object` | One object; `include_value`, `max_value_chars` for truncation |
+| `nakama_get_storage_objects` | Batch fetch up to **50** objects per call (no auto-chunking) |
 
-List endpoints paginate server-side up to `max_objects` (default 100, cap 1000). Truncated responses include `fetched`, `complete`, and a `hint` telling you how to narrow the query.
+List endpoints aggregate up to `max_objects` (default 100, cap 1000) unless you pass `cursor` for a single page. Responses include `fetched`, `complete`, `next_cursor` (when more pages exist), and `hint`.
+
+### Agent investigation workflow
+
+1. **`nakama_status`** — confirm which Console environment is connected.
+2. **`nakama_list_user_storage`** or **`nakama_list_storage_keys`** — narrow by `user_id` / `collection`; read `hint`.
+3. **`nakama_get_storage_objects`** — fetch values for known keys (≤50 per call; parallel calls OK).
+4. **`nakama_export_account`** — full single-user dump when needed; use `response_mode=resource` for large payloads.
+
+See [docs/research/nakama-mcp-agent-ux.md](docs/research/nakama-mcp-agent-ux.md) for API limits and design rationale.
+
+### Optional parameters
+
+| Parameter | Tools | Purpose |
+| --- | --- | --- |
+| `cursor` | list accounts / storage | Fetch one Nakama page; use `next_cursor` from prior response |
+| `include_value` | get storage object(s) | `false` = metadata only |
+| `max_value_chars` | get storage object(s) | Truncate large JSON to `value_preview` |
+| `response_mode` | export account | `auto` (default), `resource`, or `inline` |
 
 ## MCP client config
 

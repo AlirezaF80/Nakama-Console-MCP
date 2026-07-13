@@ -19,7 +19,7 @@ async def test_list_storage_keys_projects_metadata():
             "complete": True,
         }
 
-    with patch("src.tools.storage.nakama_list_storage", side_effect=fake_list_storage):
+    with patch("src.tools.storage._list_storage_envelope", side_effect=fake_list_storage):
         result = await nakama_list_storage_keys(
             client,
             collection="FG",

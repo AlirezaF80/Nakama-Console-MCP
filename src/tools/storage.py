@@ -5,17 +5,18 @@ from urllib.parse import quote
 
 from src.hints import append_hint, build_list_hint
 from src.nakama_client import NakamaConsoleClient
-from src.pagination import DEFAULT_MAX_OBJECTS, MAX_BATCH_OBJECTS, fetch_pages
-from src.validation import key_prefix_to_filter
+from src.pagination import DEFAULT_MAX_OBJECTS, fetch_page_once, fetch_pages
+from src.response_format import (
+    DEFAULT_VALUE_PREVIEW_CHARS,
+    format_storage_object,
+)
+from src.validation import key_prefix_to_filter, validate_storage_list_cursor
 
 BATCH_CONCURRENCY = 10
 
 
 async def nakama_list_collections(client: NakamaConsoleClient):
-    """List all storage collection names.
-
-    Returns a list of collection names that exist in the storage system.
-    """
+    """List all storage collection names."""
     return await client.get("/v2/console/storage/collections")
 
 
@@ -26,6 +27,7 @@ def _attach_storage_hint(
     key: Optional[str],
     user_id: Optional[str],
     key_prefix: Optional[str] = None,
+    list_tool: Optional[str] = None,
     extra_hint: Optional[str] = None,
 ) -> Dict[str, Any]:
     hint = build_list_hint(
@@ -38,21 +40,30 @@ def _attach_storage_hint(
             "key_prefix": key_prefix,
             "user_id": user_id,
         },
+        list_tool=list_tool,
+        next_cursor=envelope.get("next_cursor"),
     )
     envelope["hint"] = append_hint(hint, extra_hint)
     return envelope
 
 
-async def nakama_list_storage(
+async def _list_storage_envelope(
     client: NakamaConsoleClient,
+    *,
     collection: Optional[str] = None,
     key: Optional[str] = None,
     user_id: Optional[str] = None,
+    cursor: Optional[str] = None,
     max_objects: int = DEFAULT_MAX_OBJECTS,
-):
-    """List storage objects with optional filtering; auto-paginates up to max_objects."""
+) -> Dict[str, Any]:
+    validate_storage_list_cursor(
+        collection=collection,
+        key=key,
+        user_id=user_id,
+        cursor=cursor,
+    )
 
-    async def fetch_page(cursor: Optional[str]):
+    async def fetch_page(page_cursor: Optional[str]):
         params = {}
         if collection is not None:
             params["collection"] = collection
@@ -60,16 +71,39 @@ async def nakama_list_storage(
                 params["key"] = key
         if user_id is not None:
             params["user_id"] = user_id
-        if cursor is not None:
-            params["cursor"] = cursor
+        if page_cursor is not None:
+            params["cursor"] = page_cursor
         return await client.get("/v2/console/storage", params=params)
 
-    envelope = await fetch_pages(fetch_page, items_key="objects", max_objects=max_objects)
+    if cursor is not None:
+        return await fetch_page_once(fetch_page, items_key="objects", cursor=cursor)
+
+    return await fetch_pages(fetch_page, items_key="objects", max_objects=max_objects)
+
+
+async def nakama_list_storage(
+    client: NakamaConsoleClient,
+    collection: Optional[str] = None,
+    key: Optional[str] = None,
+    user_id: Optional[str] = None,
+    cursor: Optional[str] = None,
+    max_objects: int = DEFAULT_MAX_OBJECTS,
+):
+    """List storage objects with optional filtering."""
+    envelope = await _list_storage_envelope(
+        client,
+        collection=collection,
+        key=key,
+        user_id=user_id,
+        cursor=cursor,
+        max_objects=max_objects,
+    )
     return _attach_storage_hint(
         envelope,
         collection=collection,
         key=key,
         user_id=user_id,
+        list_tool="nakama_list_storage",
     )
 
 
@@ -78,27 +112,26 @@ async def nakama_list_user_storage(
     user_id: str,
     collection: Optional[str] = None,
     key_prefix: Optional[str] = None,
+    cursor: Optional[str] = None,
     max_objects: int = DEFAULT_MAX_OBJECTS,
 ):
     """List storage objects for a specific user with optional collection and key prefix."""
     key = key_prefix_to_filter(key_prefix)
-    envelope = await nakama_list_storage(
+    envelope = await _list_storage_envelope(
         client,
         collection=collection,
         key=key,
         user_id=user_id,
+        cursor=cursor,
         max_objects=max_objects,
     )
-    extra = None
-    if collection is None:
-        extra = "Add collection to narrow results when many objects exist."
     return _attach_storage_hint(
         envelope,
         collection=collection,
         key=key,
         user_id=user_id,
         key_prefix=key_prefix,
-        extra_hint=extra,
+        list_tool="nakama_list_user_storage",
     )
 
 
@@ -107,15 +140,17 @@ async def nakama_list_storage_keys(
     collection: str,
     user_id: Optional[str] = None,
     key_prefix: Optional[str] = None,
+    cursor: Optional[str] = None,
     max_objects: int = DEFAULT_MAX_OBJECTS,
 ):
     """List storage keys (metadata only) for a collection with optional filters."""
     key = key_prefix_to_filter(key_prefix)
-    envelope = await nakama_list_storage(
+    envelope = await _list_storage_envelope(
         client,
         collection=collection,
         key=key,
         user_id=user_id,
+        cursor=cursor,
         max_objects=max_objects,
     )
 
@@ -130,6 +165,7 @@ async def nakama_list_storage_keys(
         "total_count": envelope.get("total_count", 0),
         "fetched": envelope.get("fetched", len(keys)),
         "complete": envelope.get("complete", True),
+        "next_cursor": envelope.get("next_cursor"),
     }
     return _attach_storage_hint(
         result,
@@ -137,6 +173,7 @@ async def nakama_list_storage_keys(
         key=key,
         user_id=user_id,
         key_prefix=key_prefix,
+        list_tool="nakama_list_storage_keys",
     )
 
 
@@ -169,16 +206,29 @@ async def _get_storage_object(
 
 
 async def nakama_get_storage_object(
-    client: NakamaConsoleClient, collection: str, key: str, user_id: str
+    client: NakamaConsoleClient,
+    collection: str,
+    key: str,
+    user_id: str,
+    include_value: bool = True,
+    max_value_chars: int = DEFAULT_VALUE_PREVIEW_CHARS,
 ):
     """Get a specific storage object by collection, key, and user_id."""
-    return await _get_storage_object(client, collection, key, user_id)
+    obj = await _get_storage_object(client, collection, key, user_id)
+    return format_storage_object(
+        obj,
+        include_value=include_value,
+        max_value_chars=max_value_chars,
+    )
 
 
-async def _fetch_storage_batch(
+async def nakama_get_storage_objects(
     client: NakamaConsoleClient,
     objects: Sequence[Dict[str, str]],
-) -> List[Dict[str, Any]]:
+    include_value: bool = True,
+    max_value_chars: int = DEFAULT_VALUE_PREVIEW_CHARS,
+):
+    """Fetch multiple storage objects concurrently (max 50)."""
     semaphore = asyncio.Semaphore(BATCH_CONCURRENCY)
 
     async def fetch_one(item: Dict[str, str]) -> Dict[str, Any]:
@@ -189,44 +239,22 @@ async def _fetch_storage_batch(
         try:
             async with semaphore:
                 obj = await _get_storage_object(client, collection, key, user_id)
-            return {**base, "ok": True, "object": obj}
+            shaped = format_storage_object(
+                obj,
+                include_value=include_value,
+                max_value_chars=max_value_chars,
+            )
+            return {**base, "ok": True, "object": shaped}
         except Exception as e:
             return {**base, "ok": False, "error": str(e)}
 
-    return list(await asyncio.gather(*(fetch_one(item) for item in objects)))
-
-
-async def nakama_get_storage_objects(
-    client: NakamaConsoleClient,
-    objects: Sequence[Dict[str, str]],
-):
-    """Fetch multiple storage objects concurrently with internal chunking."""
-    requested = len(objects)
-    if requested == 0:
-        return {"results": [], "requested": 0, "chunks": 0, "fetched": 0, "failed": 0}
-
-    chunks: List[List[Dict[str, str]]] = [
-        list(objects[i : i + MAX_BATCH_OBJECTS])
-        for i in range(0, requested, MAX_BATCH_OBJECTS)
-    ]
-
-    results: List[Dict[str, Any]] = []
-    for chunk in chunks:
-        results.extend(await _fetch_storage_batch(client, chunk))
-
+    results = list(await asyncio.gather(*(fetch_one(item) for item in objects)))
     fetched = sum(1 for r in results if r.get("ok"))
     failed = len(results) - fetched
-    return {
-        "results": results,
-        "requested": requested,
-        "chunks": len(chunks),
-        "fetched": fetched,
-        "failed": failed,
-    }
+    return {"results": results, "fetched": fetched, "failed": failed}
 
 
 __all__ = [
-    "MAX_BATCH_OBJECTS",
     "nakama_list_collections",
     "nakama_list_storage",
     "nakama_list_user_storage",

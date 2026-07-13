@@ -14,6 +14,7 @@ from typing import Any
 
 from src.config import load_settings
 from src.nakama_client import NakamaConsoleClient
+from src.resources import ExportCache, register_resources
 from src.tools import register_all_tools
 
 logger = logging.getLogger(__name__)
@@ -40,8 +41,11 @@ async def run_mcp_server(settings: Any):
     # Instantiate server with a name and optional version/instructions
     server = Server(name="nakama-console-mcp", version=None, instructions="Nakama Console read-only MCP server")
 
+    export_cache = ExportCache()
+
     # Register all tools (account and storage)
-    register_all_tools(server, client, settings)
+    register_all_tools(server, client, settings, export_cache)
+    register_resources(server, export_cache)
 
     logger.info("Starting MCP server 'nakama-console-mcp' over stdio...")
 
