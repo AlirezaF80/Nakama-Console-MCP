@@ -6,7 +6,7 @@ Requires Python 3.10+ and a Nakama instance with Console reachable (dev default:
 
 ## Setup
 
-Copy `.env.example` to `.env` and fill in credentials. For Cursor workspace configs, `.env.nakama` works too.
+Copy `.env.example` to `.env` and fill in credentials.
 
 | Variable | Required | Description |
 | --- | --- | --- |
@@ -64,7 +64,7 @@ Point at `server.py` in the repo root with `--mcp`.
         "${workspaceFolder}/server.py",
         "--mcp",
         "--env-file",
-        "${workspaceFolder}/.env.nakama"
+        "${workspaceFolder}/.env"
       ],
       "cwd": "${workspaceFolder}"
     }
