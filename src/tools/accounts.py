@@ -1,5 +1,6 @@
 from typing import Optional
 
+from src.hints import build_list_hint
 from src.nakama_client import NakamaConsoleClient
 from src.pagination import DEFAULT_MAX_OBJECTS, fetch_pages
 
@@ -10,11 +11,7 @@ async def nakama_list_accounts(
     tombstones: Optional[bool] = None,
     max_objects: int = DEFAULT_MAX_OBJECTS,
 ):
-    """List accounts; auto-paginates up to max_objects.
-
-    Parameters mirror the Nakama Console API filters, plus max_objects.
-    Returns an envelope with users, total_count (approximate), fetched, and complete.
-    """
+    """List accounts; auto-paginates up to max_objects."""
 
     async def fetch_page(cursor: Optional[str]):
         params = {}
@@ -26,7 +23,15 @@ async def nakama_list_accounts(
             params["cursor"] = cursor
         return await client.get("/v2/console/account", params=params)
 
-    return await fetch_pages(fetch_page, items_key="users", max_objects=max_objects)
+    envelope = await fetch_pages(fetch_page, items_key="users", max_objects=max_objects)
+    envelope["hint"] = build_list_hint(
+        complete=envelope.get("complete", True),
+        fetched=envelope.get("fetched", 0),
+        total_count=envelope.get("total_count", 0),
+        filters={"filter": filter},
+        list_kind="accounts",
+    )
+    return envelope
 
 
 async def nakama_get_account(client: NakamaConsoleClient, id: str):

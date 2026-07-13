@@ -5,8 +5,13 @@ from typing import Any, Dict, Type
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, ValidationError
 
+from src.config import NakamaSettings
 from src.nakama_client import NakamaConsoleClient
 from src.models import (
+    AccountEnvelope,
+    CollectionsEnvelope,
+    ExportAccountEnvelope,
+    FriendsEnvelope,
     GetAccountArgs,
     GetStorageObjectArgs,
     GetStorageObjectsArgs,
@@ -15,12 +20,25 @@ from src.models import (
     ListAccountsEnvelope,
     ListStorageArgs,
     ListStorageCollectionsArgs,
+    ListStorageKeysArgs,
+    ListStorageKeysEnvelope,
     ListStorageEnvelope,
+    ListUserStorageArgs,
+    StatusArgs,
+    StatusEnvelope,
+    StorageObjectEnvelope,
+    UserGroupsEnvelope,
 )
-from src.pagination import DEFAULT_MAX_OBJECTS, MAX_BATCH_OBJECTS, MAX_OBJECTS_HARD_LIMIT
+from src.pagination import (
+    DEFAULT_MAX_OBJECTS,
+    MAX_BATCH_INPUT,
+    MAX_BATCH_OBJECTS,
+    MAX_OBJECTS_HARD_LIMIT,
+)
 
 # tool_name -> Pydantic args model (GetAccountArgs reused for all id-only tools)
 _TOOL_ARG_MODELS: Dict[str, Type[BaseModel]] = {
+    "nakama_status": StatusArgs,
     "nakama_list_accounts": ListAccountsArgs,
     "nakama_get_account": GetAccountArgs,
     "nakama_export_account": GetAccountArgs,
@@ -28,6 +46,8 @@ _TOOL_ARG_MODELS: Dict[str, Type[BaseModel]] = {
     "nakama_get_user_groups": GetAccountArgs,
     "nakama_list_collections": ListStorageCollectionsArgs,
     "nakama_list_storage": ListStorageArgs,
+    "nakama_list_user_storage": ListUserStorageArgs,
+    "nakama_list_storage_keys": ListStorageKeysArgs,
     "nakama_get_storage_object": GetStorageObjectArgs,
     "nakama_get_storage_objects": GetStorageObjectsArgs,
 }
@@ -36,7 +56,7 @@ _READONLY_ANNOTATIONS = ToolAnnotations(
     readOnlyHint=True,
     destructiveHint=False,
     idempotentHint=True,
-    openWorldHint=False,  # closed Nakama Console data plane
+    openWorldHint=False,
 )
 
 
@@ -54,26 +74,47 @@ def _output_schema(model: Type[BaseModel]) -> Dict[str, Any]:
     return model.model_json_schema()
 
 
-def register_all_tools(server, client: NakamaConsoleClient):
-    """Register all tools (account and storage) with the provided MCP `server`.
+def _max_objects_schema() -> Dict[str, Any]:
+    return {
+        "type": "integer",
+        "description": (
+            f"Max objects to return (default {DEFAULT_MAX_OBJECTS}, "
+            f"hard max {MAX_OBJECTS_HARD_LIMIT})"
+        ),
+        "default": DEFAULT_MAX_OBJECTS,
+        "minimum": 1,
+        "maximum": MAX_OBJECTS_HARD_LIMIT,
+    }
 
-    This uses the mcp Server.list_tools and Server.call_tool decorators to
-    advertise tool metadata and provide a single dispatcher for tool calls.
-    
-    Note: We register all tools in one place because multiple @server.list_tools()
-    decorators would overwrite each other rather than merging.
-    """
-    # lazy import to avoid circular issues
+
+def register_all_tools(server, client: NakamaConsoleClient, settings: NakamaSettings):
+    """Register all tools with the provided MCP server."""
     from src.tools import accounts as _accounts
+    from src.tools import status as _status
     from src.tools import storage as _storage
     import mcp
 
-    # Build tool definitions using mcp.Tool
     tools = []
 
-    # ==================== ACCOUNT TOOLS ====================
-    
-    # nakama_list_accounts
+    tools.append(
+        mcp.Tool(
+            name="nakama_status",
+            title="Nakama server status",
+            description=(
+                "Show which Nakama Console environment this MCP is connected to "
+                "(console_url) and node health from GET /v2/console/status. "
+                "Call first when investigating to confirm the target environment."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False,
+            },
+            outputSchema=_output_schema(StatusEnvelope),
+            annotations=_READONLY_ANNOTATIONS,
+        )
+    )
+
     tools.append(
         mcp.Tool(
             name="nakama_list_accounts",
@@ -82,8 +123,7 @@ def register_all_tools(server, client: NakamaConsoleClient):
                 "List/filter accounts by username or user id. Prefer nakama_get_account for one known id. "
                 f"Auto-paginates up to max_objects (default {DEFAULT_MAX_OBJECTS}, "
                 f"max {MAX_OBJECTS_HARD_LIMIT}); cursors stay internal. "
-                "Response: users, total_count (approx), fetched, complete. "
-                "If complete is false, raise max_objects or narrow filter."
+                "Response: users, total_count (approx), fetched, complete, hint."
             ),
             inputSchema={
                 "type": "object",
@@ -96,16 +136,7 @@ def register_all_tools(server, client: NakamaConsoleClient):
                         "type": "boolean",
                         "description": "Search only recorded deletes",
                     },
-                    "max_objects": {
-                        "type": "integer",
-                        "description": (
-                            f"Max accounts to return (default {DEFAULT_MAX_OBJECTS}, "
-                            f"hard max {MAX_OBJECTS_HARD_LIMIT})"
-                        ),
-                        "default": DEFAULT_MAX_OBJECTS,
-                        "minimum": 1,
-                        "maximum": MAX_OBJECTS_HARD_LIMIT,
-                    },
+                    "max_objects": _max_objects_schema(),
                 },
             },
             outputSchema=_output_schema(ListAccountsEnvelope),
@@ -113,7 +144,6 @@ def register_all_tools(server, client: NakamaConsoleClient):
         )
     )
 
-    # nakama_get_account
     tools.append(
         mcp.Tool(
             name="nakama_get_account",
@@ -133,12 +163,11 @@ def register_all_tools(server, client: NakamaConsoleClient):
                 },
                 "required": ["id"],
             },
-            outputSchema=None,
+            outputSchema=_output_schema(AccountEnvelope),
             annotations=_READONLY_ANNOTATIONS,
         )
     )
 
-    # nakama_export_account
     tools.append(
         mcp.Tool(
             name="nakama_export_account",
@@ -159,12 +188,11 @@ def register_all_tools(server, client: NakamaConsoleClient):
                 },
                 "required": ["id"],
             },
-            outputSchema=None,
+            outputSchema=_output_schema(ExportAccountEnvelope),
             annotations=_READONLY_ANNOTATIONS,
         )
     )
 
-    # nakama_get_friends
     tools.append(
         mcp.Tool(
             name="nakama_get_friends",
@@ -183,12 +211,11 @@ def register_all_tools(server, client: NakamaConsoleClient):
                 },
                 "required": ["id"],
             },
-            outputSchema=None,
+            outputSchema=_output_schema(FriendsEnvelope),
             annotations=_READONLY_ANNOTATIONS,
         )
     )
 
-    # nakama_get_user_groups
     tools.append(
         mcp.Tool(
             name="nakama_get_user_groups",
@@ -207,43 +234,38 @@ def register_all_tools(server, client: NakamaConsoleClient):
                 },
                 "required": ["id"],
             },
-            outputSchema=None,
+            outputSchema=_output_schema(UserGroupsEnvelope),
             annotations=_READONLY_ANNOTATIONS,
         )
     )
 
-    # ==================== STORAGE TOOLS ====================
-    
-    # nakama_list_collections
     tools.append(
         mcp.Tool(
             name="nakama_list_collections",
             title="List Nakama storage collections",
             description=(
                 "List storage collection names. "
-                "Explore flow: this → nakama_list_storage → nakama_get_storage_object(s) for values."
+                "Explore flow: this → nakama_list_user_storage / nakama_list_storage_keys "
+                "→ nakama_get_storage_objects for values."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {},
                 "additionalProperties": False,
             },
-            outputSchema=None,
+            outputSchema=_output_schema(CollectionsEnvelope),
             annotations=_READONLY_ANNOTATIONS,
         )
     )
 
-    # nakama_list_storage
     tools.append(
         mcp.Tool(
             name="nakama_list_storage",
             title="List Nakama storage objects",
             description=(
-                "List storage objects (filters: collection, key with % prefix, user_id). "
-                "Metadata only — no values. Auto-paginates up to max_objects. "
-                "Response: objects, total_count (approx), fetched, complete. "
-                f"If complete is false, raise max_objects (max {MAX_OBJECTS_HARD_LIMIT}) or narrow filters. "
-                "Load values via nakama_get_storage_objects (batch) or nakama_get_storage_object."
+                "List storage objects (filters: collection, key with % suffix prefix only, user_id). "
+                "Metadata only — no values. Do not use key '%' alone. "
+                "Response: objects, total_count, fetched, complete, hint."
             ),
             inputSchema={
                 "type": "object",
@@ -255,24 +277,15 @@ def register_all_tools(server, client: NakamaConsoleClient):
                     "key": {
                         "type": "string",
                         "description": (
-                            "Filter by key (supports % suffix for prefix search, e.g., 'level%'). "
-                            "Optional, but collection is required if key is provided"
+                            "Filter by key (suffix % prefix only, e.g. 'level%'). "
+                            "Collection is required when key is provided."
                         ),
                     },
                     "user_id": {
                         "type": "string",
                         "description": "Filter by user/owner ID",
                     },
-                    "max_objects": {
-                        "type": "integer",
-                        "description": (
-                            f"Max objects to return (default {DEFAULT_MAX_OBJECTS}, "
-                            f"hard max {MAX_OBJECTS_HARD_LIMIT})"
-                        ),
-                        "default": DEFAULT_MAX_OBJECTS,
-                        "minimum": 1,
-                        "maximum": MAX_OBJECTS_HARD_LIMIT,
-                    },
+                    "max_objects": _max_objects_schema(),
                 },
             },
             outputSchema=_output_schema(ListStorageEnvelope),
@@ -280,7 +293,72 @@ def register_all_tools(server, client: NakamaConsoleClient):
         )
     )
 
-    # nakama_get_storage_object
+    tools.append(
+        mcp.Tool(
+            name="nakama_list_user_storage",
+            title="List Nakama storage for user",
+            description=(
+                "List storage object metadata for a required user_id. "
+                "Prefer over nakama_list_storage when investigating one account. "
+                "Optional collection and key_prefix (maps to suffix % prefix filter)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "user_id": {
+                        "type": "string",
+                        "description": "Nakama user id (UUID) — required",
+                    },
+                    "collection": {
+                        "type": "string",
+                        "description": "Filter by collection name",
+                    },
+                    "key_prefix": {
+                        "type": "string",
+                        "description": "Key prefix filter (appends % if omitted)",
+                    },
+                    "max_objects": _max_objects_schema(),
+                },
+                "required": ["user_id"],
+            },
+            outputSchema=_output_schema(ListStorageEnvelope),
+            annotations=_READONLY_ANNOTATIONS,
+        )
+    )
+
+    tools.append(
+        mcp.Tool(
+            name="nakama_list_storage_keys",
+            title="List Nakama storage keys",
+            description=(
+                "List storage keys only (no values) for a required collection. "
+                "Returns [{key, user_id}, ...] plus total_count, fetched, complete, hint. "
+                "Lighter than nakama_list_storage when you only need keys before batch get."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "collection": {
+                        "type": "string",
+                        "description": "Collection name — required",
+                    },
+                    "user_id": {
+                        "type": "string",
+                        "description": "Filter by user/owner ID",
+                    },
+                    "key_prefix": {
+                        "type": "string",
+                        "description": "Key prefix filter (appends % if omitted)",
+                    },
+                    "max_objects": _max_objects_schema(),
+                },
+                "required": ["collection"],
+            },
+            outputSchema=_output_schema(ListStorageKeysEnvelope),
+            annotations=_READONLY_ANNOTATIONS,
+        )
+    )
+
     tools.append(
         mcp.Tool(
             name="nakama_get_storage_object",
@@ -307,30 +385,29 @@ def register_all_tools(server, client: NakamaConsoleClient):
                 },
                 "required": ["collection", "key", "user_id"],
             },
-            outputSchema=None,
+            outputSchema=_output_schema(StorageObjectEnvelope),
             annotations=_READONLY_ANNOTATIONS,
         )
     )
 
-    # nakama_get_storage_objects
     tools.append(
         mcp.Tool(
             name="nakama_get_storage_objects",
             title="Get Nakama storage objects (batch)",
             description=(
-                f"Batch-fetch storage objects by collection/key/user_id (1–{MAX_BATCH_OBJECTS}). "
-                "Use after nakama_list_storage to load values. "
-                "Response: results (input order; ok+object or ok+error), fetched, failed. "
-                "Per-item failures do not abort the batch."
+                f"Batch-fetch storage objects by collection/key/user_id (1–{MAX_BATCH_INPUT}). "
+                f"Auto-chunks internally in batches of {MAX_BATCH_OBJECTS}. "
+                "Use after nakama_list_storage_keys or nakama_list_user_storage. "
+                "Response: results, requested, chunks, fetched, failed."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "objects": {
                         "type": "array",
-                        "description": f"Storage object ids to fetch (1–{MAX_BATCH_OBJECTS})",
+                        "description": f"Storage object ids to fetch (1–{MAX_BATCH_INPUT})",
                         "minItems": 1,
-                        "maxItems": MAX_BATCH_OBJECTS,
+                        "maxItems": MAX_BATCH_INPUT,
                         "items": {
                             "type": "object",
                             "properties": {
@@ -358,15 +435,10 @@ def register_all_tools(server, client: NakamaConsoleClient):
         )
     )
 
-    # ==================== REGISTRATION ====================
-    
-    # register list_tools handler to populate server._tool_cache
     @server.list_tools()
     async def _list_all_tools() -> list[mcp.Tool]:
         return tools
 
-    # Tool call dispatcher for all tools.
-    # Exceptions propagate so the MCP SDK returns CallToolResult(isError=True).
     @server.call_tool()
     async def _call_tool(tool_name: str, arguments: Dict[str, Any]):
         model_cls = _TOOL_ARG_MODELS.get(tool_name)
@@ -380,6 +452,8 @@ def register_all_tools(server, client: NakamaConsoleClient):
 
         kwargs = validated.model_dump(exclude_none=True)
 
+        if tool_name == "nakama_status":
+            return await _status.nakama_status(client, settings)
         if tool_name == "nakama_list_accounts":
             return await _accounts.nakama_list_accounts(client, **kwargs)
         if tool_name == "nakama_get_account":
@@ -394,6 +468,10 @@ def register_all_tools(server, client: NakamaConsoleClient):
             return await _storage.nakama_list_collections(client)
         if tool_name == "nakama_list_storage":
             return await _storage.nakama_list_storage(client, **kwargs)
+        if tool_name == "nakama_list_user_storage":
+            return await _storage.nakama_list_user_storage(client, **kwargs)
+        if tool_name == "nakama_list_storage_keys":
+            return await _storage.nakama_list_storage_keys(client, **kwargs)
         if tool_name == "nakama_get_storage_object":
             return await _storage.nakama_get_storage_object(client, **kwargs)
         if tool_name == "nakama_get_storage_objects":

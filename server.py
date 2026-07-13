@@ -41,7 +41,7 @@ async def run_mcp_server(settings: Any):
     server = Server(name="nakama-console-mcp", version=None, instructions="Nakama Console read-only MCP server")
 
     # Register all tools (account and storage)
-    register_all_tools(server, client)
+    register_all_tools(server, client, settings)
 
     logger.info("Starting MCP server 'nakama-console-mcp' over stdio...")
 

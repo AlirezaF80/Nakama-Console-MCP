@@ -5,6 +5,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 DEFAULT_MAX_OBJECTS = 100
 MAX_OBJECTS_HARD_LIMIT = 1000
 MAX_BATCH_OBJECTS = 50
+MAX_BATCH_INPUT = 200
 
 FetchPage = Callable[[Optional[str]], Awaitable[Dict[str, Any]]]
 
@@ -74,6 +75,7 @@ __all__ = [
     "DEFAULT_MAX_OBJECTS",
     "MAX_OBJECTS_HARD_LIMIT",
     "MAX_BATCH_OBJECTS",
+    "MAX_BATCH_INPUT",
     "clamp_max_objects",
     "fetch_pages",
 ]
