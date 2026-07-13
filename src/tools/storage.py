@@ -3,21 +3,29 @@ import asyncio
 import json
 from urllib.parse import quote
 
+from src.envelopes import dump_envelope
 from src.hints import append_hint, build_list_hint
+from src.models import (
+    CollectionsEnvelope,
+    GetStorageObjectsEnvelope,
+    ListStorageEnvelope,
+    ListStorageKeysEnvelope,
+)
 from src.nakama_client import NakamaConsoleClient
 from src.pagination import DEFAULT_MAX_OBJECTS, fetch_page_once, fetch_pages
 from src.response_format import (
     DEFAULT_VALUE_PREVIEW_CHARS,
     format_storage_object,
 )
-from src.validation import key_prefix_to_filter, validate_storage_list_cursor
+from src.validation import validate_storage_list_cursor
 
 BATCH_CONCURRENCY = 10
 
 
 async def nakama_list_collections(client: NakamaConsoleClient):
     """List all storage collection names."""
-    return await client.get("/v2/console/storage/collections")
+    data = await client.get("/v2/console/storage/collections")
+    return dump_envelope(CollectionsEnvelope, data)
 
 
 def _attach_storage_hint(
@@ -98,13 +106,14 @@ async def nakama_list_storage(
         cursor=cursor,
         max_objects=max_objects,
     )
-    return _attach_storage_hint(
+    envelope = _attach_storage_hint(
         envelope,
         collection=collection,
         key=key,
         user_id=user_id,
         list_tool="nakama_list_storage",
     )
+    return dump_envelope(ListStorageEnvelope, envelope)
 
 
 async def nakama_list_user_storage(
@@ -116,23 +125,23 @@ async def nakama_list_user_storage(
     max_objects: int = DEFAULT_MAX_OBJECTS,
 ):
     """List storage objects for a specific user with optional collection and key prefix."""
-    key = key_prefix_to_filter(key_prefix)
     envelope = await _list_storage_envelope(
         client,
         collection=collection,
-        key=key,
+        key=key_prefix,
         user_id=user_id,
         cursor=cursor,
         max_objects=max_objects,
     )
-    return _attach_storage_hint(
+    envelope = _attach_storage_hint(
         envelope,
         collection=collection,
-        key=key,
+        key=key_prefix,
         user_id=user_id,
         key_prefix=key_prefix,
         list_tool="nakama_list_user_storage",
     )
+    return dump_envelope(ListStorageEnvelope, envelope)
 
 
 async def nakama_list_storage_keys(
@@ -144,11 +153,10 @@ async def nakama_list_storage_keys(
     max_objects: int = DEFAULT_MAX_OBJECTS,
 ):
     """List storage keys (metadata only) for a collection with optional filters."""
-    key = key_prefix_to_filter(key_prefix)
     envelope = await _list_storage_envelope(
         client,
         collection=collection,
-        key=key,
+        key=key_prefix,
         user_id=user_id,
         cursor=cursor,
         max_objects=max_objects,
@@ -167,14 +175,15 @@ async def nakama_list_storage_keys(
         "complete": envelope.get("complete", True),
         "next_cursor": envelope.get("next_cursor"),
     }
-    return _attach_storage_hint(
+    result = _attach_storage_hint(
         result,
         collection=collection,
-        key=key,
+        key=key_prefix,
         user_id=user_id,
         key_prefix=key_prefix,
         list_tool="nakama_list_storage_keys",
     )
+    return dump_envelope(ListStorageKeysEnvelope, result)
 
 
 def _encode_path_segment(segment: str) -> str:
@@ -251,7 +260,10 @@ async def nakama_get_storage_objects(
     results = list(await asyncio.gather(*(fetch_one(item) for item in objects)))
     fetched = sum(1 for r in results if r.get("ok"))
     failed = len(results) - fetched
-    return {"results": results, "fetched": fetched, "failed": failed}
+    return dump_envelope(
+        GetStorageObjectsEnvelope,
+        {"results": results, "fetched": fetched, "failed": failed},
+    )
 
 
 __all__ = [

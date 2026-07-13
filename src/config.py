@@ -15,13 +15,11 @@ class NakamaSettings(BaseSettings):
       - NAKAMA_NAKAMA_CONSOLE_URL
       - NAKAMA_NAKAMA_USERNAME
       - NAKAMA_NAKAMA_PASSWORD
-      - NAKAMA_NAKAMA_HTTP_KEY (optional)
     """
 
     nakama_console_url: str
     nakama_username: str
     nakama_password: str
-    nakama_http_key: str = "defaultkey"
 
     model_config = SettingsConfigDict(
         env_prefix="NAKAMA_",

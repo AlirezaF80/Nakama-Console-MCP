@@ -1,6 +1,8 @@
 from typing import Any, Dict, Optional
 
 from src.config import NakamaSettings
+from src.envelopes import dump_envelope
+from src.models import StatusEnvelope
 from src.nakama_client import NakamaConsoleClient
 
 
@@ -17,7 +19,7 @@ async def nakama_status(client: NakamaConsoleClient, settings: NakamaSettings) -
     """Return environment identity and optional Nakama node status."""
     result: Dict[str, Any] = {
         "console_url": settings.nakama_console_url,
-        "authenticated": client._token is not None,
+        "authenticated": client.is_authenticated,
         "read_only": True,
         "nodes": [],
         "timestamp": None,
@@ -34,7 +36,7 @@ async def nakama_status(client: NakamaConsoleClient, settings: NakamaSettings) -
     except Exception as e:
         result["hint"] = f"Status endpoint unavailable: {e}"
 
-    return result
+    return dump_envelope(StatusEnvelope, result)
 
 
 __all__ = ["nakama_status"]

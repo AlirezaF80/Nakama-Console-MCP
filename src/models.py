@@ -12,37 +12,64 @@ from src.validation import key_prefix_to_filter, validate_storage_key_filter
 
 
 class ListAccountsArgs(BaseModel):
-    filter: Optional[str] = None
-    tombstones: Optional[bool] = None
-    cursor: Optional[str] = None
-    max_objects: int = Field(default=DEFAULT_MAX_OBJECTS, ge=1, le=MAX_OBJECTS_HARD_LIMIT)
+    filter: Optional[str] = Field(
+        default=None, description="User ID or username filter"
+    )
+    tombstones: Optional[bool] = Field(
+        default=None, description="Search only recorded deletes"
+    )
+    cursor: Optional[str] = Field(
+        default=None,
+        description="Opaque cursor from a prior response next_cursor field (single page)",
+    )
+    max_objects: int = Field(
+        default=DEFAULT_MAX_OBJECTS,
+        ge=1,
+        le=MAX_OBJECTS_HARD_LIMIT,
+        description=(
+            f"Max objects to return (default {DEFAULT_MAX_OBJECTS}, "
+            f"hard max {MAX_OBJECTS_HARD_LIMIT})"
+        ),
+    )
 
 
 class GetAccountArgs(BaseModel):
-    id: str
+    id: str = Field(description="Nakama user id (UUID)")
 
 
 class ExportAccountArgs(BaseModel):
-    id: str
-    response_mode: Literal["inline", "resource", "auto"] = "auto"
-
-
-class ListStorageCollectionsArgs(BaseModel):
-    """No arguments required for listing collections (kept for symmetry)."""
-    pass
-
-
-class StatusArgs(BaseModel):
-    """No arguments required for server status."""
-    pass
+    id: str = Field(description="Nakama user id (UUID)")
+    response_mode: Literal["inline", "resource", "auto"] = Field(
+        default="auto",
+        description=(
+            "inline: full JSON in tool result; resource: MCP resource_link; "
+            "auto: resource when export exceeds inline byte threshold"
+        ),
+    )
 
 
 class ListStorageArgs(BaseModel):
-    collection: Optional[str] = None
-    key: Optional[str] = None
-    user_id: Optional[str] = None
-    cursor: Optional[str] = None
-    max_objects: int = Field(default=DEFAULT_MAX_OBJECTS, ge=1, le=MAX_OBJECTS_HARD_LIMIT)
+    collection: Optional[str] = Field(
+        default=None, description="Filter by collection name"
+    )
+    key: Optional[str] = Field(
+        default=None,
+        description="Suffix % prefix only (e.g. 'level%'). Requires collection.",
+    )
+    user_id: Optional[str] = Field(default=None, description="Filter by user/owner ID")
+    cursor: Optional[str] = Field(
+        default=None,
+        description="Opaque cursor from a prior response next_cursor field (single page)",
+    )
+    max_objects: int = Field(
+        default=DEFAULT_MAX_OBJECTS,
+        ge=1,
+        le=MAX_OBJECTS_HARD_LIMIT,
+        description=(
+            f"Max objects to return (default {DEFAULT_MAX_OBJECTS}, "
+            f"hard max {MAX_OBJECTS_HARD_LIMIT})"
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_key_filters(self):
@@ -54,42 +81,76 @@ class ListStorageArgs(BaseModel):
 
 
 class ListUserStorageArgs(BaseModel):
-    user_id: str
-    collection: Optional[str] = None
-    key_prefix: Optional[str] = None
-    cursor: Optional[str] = None
-    max_objects: int = Field(default=DEFAULT_MAX_OBJECTS, ge=1, le=MAX_OBJECTS_HARD_LIMIT)
+    user_id: str = Field(description="Nakama user id (UUID) — required")
+    collection: Optional[str] = Field(
+        default=None, description="Filter by collection name"
+    )
+    key_prefix: Optional[str] = Field(
+        default=None, description="Key prefix filter (appends % if omitted)"
+    )
+    cursor: Optional[str] = Field(
+        default=None,
+        description="Opaque cursor from a prior response next_cursor field (single page)",
+    )
+    max_objects: int = Field(
+        default=DEFAULT_MAX_OBJECTS,
+        ge=1,
+        le=MAX_OBJECTS_HARD_LIMIT,
+        description=(
+            f"Max objects to return (default {DEFAULT_MAX_OBJECTS}, "
+            f"hard max {MAX_OBJECTS_HARD_LIMIT})"
+        ),
+    )
 
     @model_validator(mode="after")
-    def validate_key_prefix(self):
+    def normalize_key_prefix(self):
         if self.key_prefix is not None:
-            key_prefix_to_filter(self.key_prefix)
+            self.key_prefix = key_prefix_to_filter(self.key_prefix)
         return self
 
 
 class ListStorageKeysArgs(BaseModel):
-    collection: str
-    user_id: Optional[str] = None
-    key_prefix: Optional[str] = None
-    cursor: Optional[str] = None
-    max_objects: int = Field(default=DEFAULT_MAX_OBJECTS, ge=1, le=MAX_OBJECTS_HARD_LIMIT)
+    collection: str = Field(description="Collection name — required")
+    user_id: Optional[str] = Field(default=None, description="Filter by user/owner ID")
+    key_prefix: Optional[str] = Field(
+        default=None, description="Key prefix filter (appends % if omitted)"
+    )
+    cursor: Optional[str] = Field(
+        default=None,
+        description="Opaque cursor from a prior response next_cursor field (single page)",
+    )
+    max_objects: int = Field(
+        default=DEFAULT_MAX_OBJECTS,
+        ge=1,
+        le=MAX_OBJECTS_HARD_LIMIT,
+        description=(
+            f"Max objects to return (default {DEFAULT_MAX_OBJECTS}, "
+            f"hard max {MAX_OBJECTS_HARD_LIMIT})"
+        ),
+    )
 
     @model_validator(mode="after")
-    def validate_key_prefix(self):
+    def normalize_key_prefix(self):
         if self.key_prefix is not None:
-            key_prefix_to_filter(self.key_prefix)
+            self.key_prefix = key_prefix_to_filter(self.key_prefix)
         return self
 
 
 class GetStorageObjectArgs(BaseModel):
-    collection: str
-    key: str
-    user_id: str
-    include_value: bool = True
+    collection: str = Field(description="Collection name")
+    key: str = Field(description="Storage object key")
+    user_id: str = Field(description="User/owner ID")
+    include_value: bool = Field(
+        default=True, description="Include storage value in the response (default true)"
+    )
     max_value_chars: int = Field(
         default=DEFAULT_VALUE_PREVIEW_CHARS,
         ge=0,
         le=MAX_VALUE_PREVIEW_CHARS,
+        description=(
+            f"Max JSON chars before value is truncated to value_preview "
+            f"(default {DEFAULT_VALUE_PREVIEW_CHARS}, max {MAX_VALUE_PREVIEW_CHARS})"
+        ),
     )
 
 
@@ -100,12 +161,22 @@ class StorageObjectId(BaseModel):
 
 
 class GetStorageObjectsArgs(BaseModel):
-    objects: List[StorageObjectId] = Field(min_length=1, max_length=MAX_BATCH_OBJECTS)
-    include_value: bool = True
+    objects: List[StorageObjectId] = Field(
+        min_length=1,
+        max_length=MAX_BATCH_OBJECTS,
+        description=f"Storage object ids to fetch (1–{MAX_BATCH_OBJECTS})",
+    )
+    include_value: bool = Field(
+        default=True, description="Include storage value in the response (default true)"
+    )
     max_value_chars: int = Field(
         default=DEFAULT_VALUE_PREVIEW_CHARS,
         ge=0,
         le=MAX_VALUE_PREVIEW_CHARS,
+        description=(
+            f"Max JSON chars before value is truncated to value_preview "
+            f"(default {DEFAULT_VALUE_PREVIEW_CHARS}, max {MAX_VALUE_PREVIEW_CHARS})"
+        ),
     )
 
 
@@ -120,7 +191,8 @@ class ListAccountsEnvelope(BaseModel):
         description="True if all matching users were returned within max_objects"
     )
     next_cursor: Optional[str] = Field(
-        default=None, description="Opaque cursor for the next page when complete is false"
+        default=None,
+        description="Opaque cursor for the next page when complete is false",
     )
     hint: Optional[str] = Field(
         default=None, description="Suggested next step or narrowing advice"
@@ -137,7 +209,8 @@ class ListStorageEnvelope(BaseModel):
         description="True if all matching objects were returned within max_objects"
     )
     next_cursor: Optional[str] = Field(
-        default=None, description="Opaque cursor for the next page when complete is false"
+        default=None,
+        description="Opaque cursor for the next page when complete is false",
     )
     hint: Optional[str] = Field(
         default=None, description="Suggested next step or narrowing advice"
@@ -154,7 +227,8 @@ class ListStorageKeysEnvelope(BaseModel):
         description="True if all matching keys were returned within max_objects"
     )
     next_cursor: Optional[str] = Field(
-        default=None, description="Opaque cursor for the next page when complete is false"
+        default=None,
+        description="Opaque cursor for the next page when complete is false",
     )
     hint: Optional[str] = Field(
         default=None, description="Suggested next step or narrowing advice"
@@ -184,7 +258,9 @@ class GetStorageObjectsEnvelope(BaseModel):
 
 class StatusEnvelope(BaseModel):
     console_url: str = Field(description="Nakama Console URL for this MCP connection")
-    authenticated: bool = Field(description="Whether the MCP server has a valid session token")
+    authenticated: bool = Field(
+        description="Whether the MCP server has a valid session token"
+    )
     read_only: bool = Field(default=True, description="This MCP server is read-only")
     nodes: list[dict[str, Any]] = Field(
         default_factory=list, description="Node status from GET /v2/console/status"
@@ -207,7 +283,9 @@ class StorageObjectEnvelope(BaseModel):
     collection: Optional[str] = Field(default=None, description="Collection name")
     key: Optional[str] = Field(default=None, description="Storage object key")
     user_id: Optional[str] = Field(default=None, description="User/owner ID")
-    value: Optional[Any] = Field(default=None, description="Decoded storage value when JSON")
+    value: Optional[Any] = Field(
+        default=None, description="Decoded storage value when JSON"
+    )
     value_preview: Optional[str] = Field(
         default=None, description="Truncated JSON preview when value is large"
     )
@@ -218,10 +296,16 @@ class StorageObjectEnvelope(BaseModel):
         default=None, description="Original UTF-8 byte length when truncated"
     )
     version: Optional[str] = Field(default=None, description="Object version hash")
-    permission_read: Optional[int] = Field(default=None, description="Read permission level")
-    permission_write: Optional[int] = Field(default=None, description="Write permission level")
+    permission_read: Optional[int] = Field(
+        default=None, description="Read permission level"
+    )
+    permission_write: Optional[int] = Field(
+        default=None, description="Write permission level"
+    )
     create_time: Optional[str] = Field(default=None, description="Creation timestamp")
-    update_time: Optional[str] = Field(default=None, description="Last update timestamp")
+    update_time: Optional[str] = Field(
+        default=None, description="Last update timestamp"
+    )
 
 
 class AccountEnvelope(BaseModel):
@@ -229,16 +313,21 @@ class AccountEnvelope(BaseModel):
 
     user: Optional[dict[str, Any]] = Field(default=None, description="User profile")
     wallet: Optional[Any] = Field(default=None, description="Wallet data")
-    devices: Optional[list[dict[str, Any]]] = Field(default=None, description="Linked devices")
+    devices: Optional[list[dict[str, Any]]] = Field(
+        default=None, description="Linked devices"
+    )
     custom_id: Optional[str] = Field(default=None, description="Custom account id")
-    disable_time: Optional[str] = Field(default=None, description="Disable timestamp if banned")
+    disable_time: Optional[str] = Field(
+        default=None, description="Disable timestamp if banned"
+    )
 
 
 class ExportAccountEnvelope(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     response_mode: Optional[str] = Field(
-        default=None, description="inline or resource depending on response_mode argument"
+        default=None,
+        description="inline or resource depending on response_mode argument",
     )
     resource_uri: Optional[str] = Field(
         default=None, description="MCP resource URI when response_mode is resource"
@@ -246,15 +335,23 @@ class ExportAccountEnvelope(BaseModel):
     summary: Optional[dict[str, int]] = Field(
         default=None, description="Section counts when response_mode is resource"
     )
-    hint: Optional[str] = Field(default=None, description="How to read a resource export")
-    account: Optional[dict[str, Any]] = Field(default=None, description="Account record")
-    storage: Optional[list[dict[str, Any]]] = Field(default=None, description="Storage objects")
+    hint: Optional[str] = Field(
+        default=None, description="How to read a resource export"
+    )
+    account: Optional[dict[str, Any]] = Field(
+        default=None, description="Account record"
+    )
+    storage: Optional[list[dict[str, Any]]] = Field(
+        default=None, description="Storage objects"
+    )
     objects: Optional[list[dict[str, Any]]] = Field(
         default=None, description="Storage objects (Nakama export field name)"
     )
     friends: Optional[list[dict[str, Any]]] = Field(default=None, description="Friends")
     groups: Optional[list[dict[str, Any]]] = Field(default=None, description="Groups")
-    messages: Optional[list[dict[str, Any]]] = Field(default=None, description="Messages")
+    messages: Optional[list[dict[str, Any]]] = Field(
+        default=None, description="Messages"
+    )
     notifications: Optional[list[dict[str, Any]]] = Field(
         default=None, description="Notifications"
     )
@@ -272,23 +369,29 @@ class ExportAccountEnvelope(BaseModel):
 class FriendsEnvelope(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    friends: Optional[list[dict[str, Any]]] = Field(default=None, description="Friend entries")
-    cursor: Optional[str] = Field(default=None, description="Pagination cursor when present")
+    friends: Optional[list[dict[str, Any]]] = Field(
+        default=None, description="Friend entries"
+    )
+    cursor: Optional[str] = Field(
+        default=None, description="Pagination cursor when present"
+    )
 
 
 class UserGroupsEnvelope(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    groups: Optional[list[dict[str, Any]]] = Field(default=None, description="Group memberships")
-    cursor: Optional[str] = Field(default=None, description="Pagination cursor when present")
+    groups: Optional[list[dict[str, Any]]] = Field(
+        default=None, description="Group memberships"
+    )
+    cursor: Optional[str] = Field(
+        default=None, description="Pagination cursor when present"
+    )
 
 
 __all__ = [
     "ListAccountsArgs",
     "GetAccountArgs",
     "ExportAccountArgs",
-    "ListStorageCollectionsArgs",
-    "StatusArgs",
     "ListStorageArgs",
     "ListUserStorageArgs",
     "ListStorageKeysArgs",

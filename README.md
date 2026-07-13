@@ -13,7 +13,6 @@ Copy `.env.example` to `.env` and fill in credentials.
 | `NAKAMA_NAKAMA_CONSOLE_URL` | yes | Console base URL |
 | `NAKAMA_NAKAMA_USERNAME` | yes | Console admin username |
 | `NAKAMA_NAKAMA_PASSWORD` | yes | Console admin password |
-| `NAKAMA_NAKAMA_HTTP_KEY` | no | Server HTTP key (default: `defaultkey`) |
 
 Yes, the env vars really do start with `NAKAMA_NAKAMA_`. Pydantic uses `env_prefix="NAKAMA_"` on fields named `nakama_*`.
 

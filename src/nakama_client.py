@@ -53,6 +53,10 @@ class NakamaConsoleClient:
             logger.info("Authenticated to Nakama Console; token cached")
             return self._token
 
+    @property
+    def is_authenticated(self) -> bool:
+        return self._token is not None
+
     def _auth_headers(self) -> Dict[str, str]:
         headers = {}
         if self._token:

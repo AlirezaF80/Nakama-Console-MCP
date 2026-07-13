@@ -1,9 +1,11 @@
 import json
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Dict, Literal, Optional
 
-from mcp.types import ContentBlock, ResourceLink, TextContent
+from mcp.types import ResourceLink, TextContent
 
+from src.envelopes import dump_envelope
 from src.hints import build_list_hint
+from src.models import ListAccountsEnvelope
 from src.nakama_client import NakamaConsoleClient
 from src.pagination import DEFAULT_MAX_OBJECTS, fetch_page_once, fetch_pages
 from src.resources import ExportCache
@@ -12,6 +14,7 @@ from src.response_format import (
     build_export_summary,
     export_json_size,
 )
+from src.tool_result import ToolResult
 
 
 async def nakama_list_accounts(
@@ -36,7 +39,9 @@ async def nakama_list_accounts(
     if cursor is not None:
         envelope = await fetch_page_once(fetch_page, items_key="users", cursor=cursor)
     else:
-        envelope = await fetch_pages(fetch_page, items_key="users", max_objects=max_objects)
+        envelope = await fetch_pages(
+            fetch_page, items_key="users", max_objects=max_objects
+        )
 
     envelope["hint"] = build_list_hint(
         complete=envelope.get("complete", True),
@@ -46,7 +51,7 @@ async def nakama_list_accounts(
         list_kind="accounts",
         next_cursor=envelope.get("next_cursor"),
     )
-    return envelope
+    return dump_envelope(ListAccountsEnvelope, envelope)
 
 
 async def nakama_get_account(client: NakamaConsoleClient, id: str):
@@ -59,7 +64,7 @@ async def nakama_export_account(
     id: str,
     response_mode: Literal["inline", "resource", "auto"] = "auto",
     export_cache: Optional[ExportCache] = None,
-) -> Union[Dict[str, Any], Tuple[List[ContentBlock], Dict[str, Any]]]:
+) -> ToolResult:
     """Export account data inline or as an MCP resource when large."""
     data = await client.get(f"/v2/console/account/{id}/export")
     if not isinstance(data, dict):
@@ -80,8 +85,9 @@ async def nakama_export_account(
             "summary": summary,
             "hint": "Read the full export via the MCP resource URI.",
         }
-        return (
-            [
+        return ToolResult(
+            structured=payload,
+            content=[
                 TextContent(type="text", text=json.dumps(payload, indent=2)),
                 ResourceLink(
                     type="resource_link",
@@ -90,11 +96,10 @@ async def nakama_export_account(
                     mimeType="application/json",
                 ),
             ],
-            payload,
         )
 
     data["response_mode"] = "inline"
-    return data
+    return ToolResult(structured=data)
 
 
 async def nakama_get_friends(client: NakamaConsoleClient, id: str):
