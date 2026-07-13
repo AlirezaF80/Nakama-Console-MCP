@@ -4,6 +4,7 @@ __pycache__/
 *.pyo
 *.pyd
 .env
+.env.nakama
 
 # Editor folders
 .vscode/

@@ -1,50 +1,58 @@
 # Nakama Console MCP (read-only)
 
-This project implements a read-only Model Context Protocol (MCP) server that exposes selected Nakama Console API endpoints as MCP tools.
+Read-only [MCP](https://modelcontextprotocol.io/) server for Nakama Console. It logs in with console credentials, keeps the session token internally, and exposes a fixed set of query tools. No writes, no deletes.
 
-## Goals
+Requires Python 3.10+ and a Nakama instance with Console reachable (dev default: `http://127.0.0.1:7351`).
 
-- Provide safe, read-only access to Nakama Console data for AI assistants and tooling.
-- Authenticate to Nakama Console using console credentials and maintain a session token internally.
+## Setup
 
-## Quick start
+Copy `.env.example` to `.env` and fill in credentials. For Cursor workspace configs, `.env.nakama` works too.
 
-1. Copy `.env.example` to `.env` and fill in your Nakama console credentials.
-2. Install dependencies:
+| Variable | Required | Description |
+| --- | --- | --- |
+| `NAKAMA_NAKAMA_CONSOLE_URL` | yes | Console base URL |
+| `NAKAMA_NAKAMA_USERNAME` | yes | Console admin username |
+| `NAKAMA_NAKAMA_PASSWORD` | yes | Console admin password |
+| `NAKAMA_NAKAMA_HTTP_KEY` | no | Server HTTP key (default: `defaultkey`) |
 
-```
+Yes, the env vars really do start with `NAKAMA_NAKAMA_`. Pydantic uses `env_prefix="NAKAMA_"` on fields named `nakama_*`.
+
+```bash
 pip install -r requirements.txt
-```
-
-3. Run the MCP server (example):
-
-```pwsh
+python server.py --test    # optional: list a few accounts
 python server.py --mcp
 ```
 
-## Configuring the Local MCP entry (mcp.json)
+Use `--env-file path/to/.env` when the MCP client should load credentials from a non-default file.
 
-If you run the MCP server from the VS Code LocalProcess MCP host (or any client that reads an `mcp.json` file), you need to point the `nakama-console-mcp` entry to the root `server.py` we provide. Below are recommended examples.
+## Tools
 
-**1. User/global `mcp.json` (Windows absolute path example)**
+12 read-only tools, all marked `readOnlyHint` for MCP clients.
 
-Place or update the `nakama-console-mcp` entry in your `mcp.json` (this is typically the file stored under your VS Code user data / roaming profile) so it points to the repository `server.py` and passes the `--mcp` flag:
+| Tool | What it does |
+| --- | --- |
+| `nakama_status` | Console URL you're connected to + node health |
+| `nakama_list_accounts` | List or filter accounts by username or user id |
+| `nakama_get_account` | One account: profile, devices, wallet, metadata |
+| `nakama_export_account` | Full dump (storage, friends, groups, messages, leaderboards, ...) |
+| `nakama_get_friends` | Friend list for a user |
+| `nakama_get_user_groups` | Groups a user belongs to |
+| `nakama_list_collections` | Storage collection names |
+| `nakama_list_storage` | Storage metadata; filter by collection, key prefix, or user_id |
+| `nakama_list_user_storage` | Storage metadata for one user |
+| `nakama_list_storage_keys` | Keys only, no values |
+| `nakama_get_storage_object` | One object by collection / key / user_id |
+| `nakama_get_storage_objects` | Batch fetch; chunks internally |
 
-```json
-"nakama-console-mcp": {
- "type": "stdio",
- "command": "python",
- "args": [
-  "C:\\MCP Servers\\Nakama-Console-MCP\\server.py",
-  "--mcp"
- ]
-}
-```
+List endpoints paginate server-side up to `max_objects` (default 100, cap 1000). Truncated responses include `fetched`, `complete`, and a `hint` telling you how to narrow the query.
 
-**2. Per-workspace `.cursor/mcp.json` (Cursor — recommended for project-specific configs)**
+## MCP client config
 
-Cursor uses `.cursor/mcp.json` (not `.vscode/mcp.json`). STDIO servers require `"type": "stdio"`.
-Pass the project env file via `--env-file` with `${workspaceFolder}` interpolation (more reliable than `envFile` alone):
+Point at `server.py` in the repo root with `--mcp`.
+
+### Cursor — `.cursor/mcp.json`
+
+`mcpServers` key, `"type": "stdio"`. `--env-file` with `${workspaceFolder}` is more reliable than `envFile` alone:
 
 ```json
 {
@@ -53,43 +61,69 @@ Pass the project env file via `--env-file` with `${workspaceFolder}` interpolati
       "type": "stdio",
       "command": "python",
       "args": [
-        "C:\\MCP Servers\\nakama-console-mcp\\server.py",
+        "${workspaceFolder}/server.py",
         "--mcp",
         "--env-file",
         "${workspaceFolder}/.env.nakama"
       ],
-      "cwd": "C:\\MCP Servers\\nakama-console-mcp"
+      "cwd": "${workspaceFolder}"
     }
   }
 }
 ```
 
-**VS Code** uses `.vscode/mcp.json` with a `"servers"` key instead of `"mcpServers"`.
+### VS Code — `.vscode/mcp.json`
 
-**Alternative:** reference a workspace-local env file (if you prefer `.env` files):
+Same shape, but the top-level key is `servers`:
 
 ```json
 {
- "servers": {
-  "nakama-console-mcp": {
-   "type": "stdio",
-   "command": "python",
-   "args": ["-m", "src.server", "--mcp"],
-   "cwd": "${workspaceFolder}",
-   "envFile": "${workspaceFolder}/.env.nakama"
+  "servers": {
+    "nakama-console-mcp": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}/server.py",
+        "--mcp",
+        "--env-file",
+        "${workspaceFolder}/.env"
+      ],
+      "cwd": "${workspaceFolder}"
+    }
   }
- }
 }
 ```
 
-**Security note:** prefer using `inputs` (promptString) for secrets so VS Code stores them securely rather than checking secrets into source control. If you use an env file, keep it out of version control (add to `.gitignore`).
+### Global config
 
-## Security
+If the server lives outside any workspace, use absolute paths and wrap under `mcpServers` (Cursor) or `servers` (VS Code):
 
-- This project is read-only for now, and will not perform any write/delete operations on the Nakama server.
-- Keep `.env` out of source control.
+```json
+{
+  "mcpServers": {
+    "nakama-console-mcp": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "C:\\path\\to\\nakama-console-mcp\\server.py",
+        "--mcp"
+      ],
+      "cwd": "C:\\path\\to\\nakama-console-mcp"
+    }
+  }
+}
+```
 
-## Next steps
+For secrets, `inputs` with `promptString` beats checking credentials into git. Env files belong in `.gitignore`.
 
-- Implement full tool set for storage, leaderboards, matches, and server status.
-- Add unit tests and integration tests against a local Nakama instance.
+## Tests
+
+```bash
+pytest
+```
+
+Covers validation, pagination chunking, response hints, and storage key listing. Nothing hits a live Nakama yet.
+
+## Not done yet
+
+Leaderboard and match tools as first-class endpoints. Integration tests against a running Nakama.
