@@ -446,6 +446,11 @@ def register_all_tools(
 
 def tool_result_to_json(result: Any) -> str:
     """Serialize tool results for tests."""
+    if isinstance(result, tuple) and len(result) == 2:
+        content, structured = result
+        if structured is not None:
+            return json.dumps(structured)
+        return content[0].text if content else ""
     if isinstance(result, CallToolResult):
         return result.content[0].text if result.content else ""
     return json.dumps(result)

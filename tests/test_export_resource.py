@@ -1,6 +1,6 @@
+import json
 import pytest
 from types import SimpleNamespace
-from mcp.types import CallToolResult
 
 from src.resources import ExportCache
 from src.response_format import EXPORT_INLINE_MAX_BYTES
@@ -27,10 +27,12 @@ async def test_export_auto_uses_resource_for_large_payload():
         export_cache=cache,
     )
 
-    assert isinstance(result, CallToolResult)
-    assert len(result.content) == 2
-    assert str(result.content[1].uri).startswith("nakama://export/user-1/")
-    assert cache.get(str(result.content[1].uri)) is not None
+    content, structured = result
+    assert len(content) == 2
+    assert structured["response_mode"] == "resource"
+    assert str(content[1].uri).startswith("nakama://export/user-1/")
+    assert cache.get(str(content[1].uri)) is not None
+    assert structured["resource_uri"] == str(content[1].uri)
 
 
 @pytest.mark.asyncio

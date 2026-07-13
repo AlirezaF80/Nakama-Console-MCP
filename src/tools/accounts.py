@@ -1,7 +1,7 @@
 import json
-from typing import Any, Dict, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
-from mcp.types import CallToolResult, ResourceLink, TextContent
+from mcp.types import ContentBlock, ResourceLink, TextContent
 
 from src.hints import build_list_hint
 from src.nakama_client import NakamaConsoleClient
@@ -59,7 +59,7 @@ async def nakama_export_account(
     id: str,
     response_mode: Literal["inline", "resource", "auto"] = "auto",
     export_cache: Optional[ExportCache] = None,
-) -> Union[Dict[str, Any], CallToolResult]:
+) -> Union[Dict[str, Any], Tuple[List[ContentBlock], Dict[str, Any]]]:
     """Export account data inline or as an MCP resource when large."""
     data = await client.get(f"/v2/console/account/{id}/export")
     if not isinstance(data, dict):
@@ -80,8 +80,8 @@ async def nakama_export_account(
             "summary": summary,
             "hint": "Read the full export via the MCP resource URI.",
         }
-        return CallToolResult(
-            content=[
+        return (
+            [
                 TextContent(type="text", text=json.dumps(payload, indent=2)),
                 ResourceLink(
                     type="resource_link",
@@ -89,7 +89,8 @@ async def nakama_export_account(
                     name=f"Nakama export {id}",
                     mimeType="application/json",
                 ),
-            ]
+            ],
+            payload,
         )
 
     data["response_mode"] = "inline"
