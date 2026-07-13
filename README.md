@@ -116,14 +116,6 @@ If the server lives outside any workspace, use absolute paths and wrap under `mc
 
 For secrets, `inputs` with `promptString` beats checking credentials into git. Env files belong in `.gitignore`.
 
-## Tests
-
-```bash
-pytest
-```
-
-Covers validation, pagination chunking, response hints, and storage key listing. Nothing hits a live Nakama yet.
-
 ## Not done yet
 
 Leaderboard and match tools as first-class endpoints. Integration tests against a running Nakama.
