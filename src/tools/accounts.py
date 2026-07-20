@@ -4,10 +4,15 @@ from typing import Any, Dict, Literal, Optional
 from mcp.types import ResourceLink, TextContent
 
 from src.envelopes import dump_envelope
-from src.hints import build_list_hint
-from src.models import ListAccountsEnvelope
+from src.hints import append_hint, build_list_hint
+from src.models import ListAccountsEnvelope, ListWalletLedgerEnvelope
 from src.nakama_client import NakamaConsoleClient
-from src.pagination import DEFAULT_MAX_OBJECTS, fetch_page_once, fetch_pages
+from src.pagination import (
+    DEFAULT_MAX_OBJECTS,
+    clamp_max_objects,
+    fetch_page_once,
+    fetch_pages,
+)
 from src.resources import ExportCache
 from src.response_format import (
     EXPORT_INLINE_MAX_BYTES,
@@ -15,6 +20,9 @@ from src.response_format import (
     export_json_size,
 )
 from src.tool_result import ToolResult
+
+# Nakama Console GetWalletLedger requires limit in [1, 100]
+_WALLET_LEDGER_PAGE_MAX = 100
 
 
 async def nakama_list_accounts(
@@ -57,6 +65,46 @@ async def nakama_list_accounts(
 async def nakama_get_account(client: NakamaConsoleClient, id: str):
     """Get a single account by ID."""
     return await client.get(f"/v2/console/account/{id}")
+
+
+async def nakama_list_wallet_ledger(
+    client: NakamaConsoleClient,
+    id: str,
+    cursor: Optional[str] = None,
+    max_objects: int = DEFAULT_MAX_OBJECTS,
+    after: Optional[str] = None,
+    before: Optional[str] = None,
+):
+    """List wallet ledger entries; auto-paginates unless cursor is provided."""
+    page_limit = min(_WALLET_LEDGER_PAGE_MAX, clamp_max_objects(max_objects))
+
+    async def fetch_page(page_cursor: Optional[str]):
+        params: Dict[str, Any] = {"limit": page_limit}
+        if page_cursor is not None:
+            params["cursor"] = page_cursor
+        if after is not None:
+            params["after"] = after
+        if before is not None:
+            params["before"] = before
+        return await client.get(f"/v2/console/account/{id}/wallet", params=params)
+
+    if cursor is not None:
+        envelope = await fetch_page_once(fetch_page, items_key="items", cursor=cursor)
+    else:
+        envelope = await fetch_pages(
+            fetch_page, items_key="items", max_objects=max_objects
+        )
+
+    hint = None
+    if envelope.get("complete") and envelope.get("fetched"):
+        hint = (
+            "Use nakama_get_account for current wallet balances. "
+            "Prefer nakama_export_account only when a full account dump is required."
+        )
+    if envelope.get("next_cursor"):
+        hint = append_hint(hint, "Pass next_cursor to fetch the next page.")
+    envelope["hint"] = hint
+    return dump_envelope(ListWalletLedgerEnvelope, envelope)
 
 
 async def nakama_export_account(
@@ -113,6 +161,7 @@ async def nakama_get_user_groups(client: NakamaConsoleClient, id: str):
 __all__ = [
     "nakama_list_accounts",
     "nakama_get_account",
+    "nakama_list_wallet_ledger",
     "nakama_export_account",
     "nakama_get_friends",
     "nakama_get_user_groups",

@@ -25,6 +25,8 @@ from src.models import (
     ListStorageKeysEnvelope,
     ListStorageEnvelope,
     ListUserStorageArgs,
+    ListWalletLedgerArgs,
+    ListWalletLedgerEnvelope,
     StatusEnvelope,
     StorageObjectEnvelope,
     UserGroupsEnvelope,
@@ -76,6 +78,12 @@ async def _list_accounts(ctx: ToolContext, **kwargs: Any) -> ToolResult:
 async def _get_account(ctx: ToolContext, **kwargs: Any) -> ToolResult:
     return ToolResult(
         structured=await accounts.nakama_get_account(ctx.client, **kwargs)
+    )
+
+
+async def _list_wallet_ledger(ctx: ToolContext, **kwargs: Any) -> ToolResult:
+    return ToolResult(
+        structured=await accounts.nakama_list_wallet_ledger(ctx.client, **kwargs)
     )
 
 
@@ -172,7 +180,8 @@ TOOL_SPECS: list[ToolSpec] = [
         description=(
             "Full account export. Very large — use response_mode=resource or auto "
             "(default) to return an MCP resource_link instead of inline JSON. "
-            "Prefer targeted storage tools when you know specific keys."
+            "Prefer targeted storage tools when you know specific keys; "
+            "prefer nakama_list_wallet_ledger for currency history only."
         ),
         args_model=ExportAccountArgs,
         output_model=ExportAccountEnvelope,
@@ -193,6 +202,21 @@ TOOL_SPECS: list[ToolSpec] = [
         args_model=GetAccountArgs,
         output_model=UserGroupsEnvelope,
         handler=_get_user_groups,
+    ),
+    ToolSpec(
+        name="nakama_list_wallet_ledger",
+        title="List Nakama wallet ledger",
+        description=(
+            "Wallet ledger (changeset history) for a user. "
+            "Prefer over export when only currency history is needed. "
+            "Pass cursor for one page; omit cursor to aggregate "
+            f"up to max_objects (default {DEFAULT_MAX_OBJECTS}). "
+            "Optional after/before ISO-8601 time filters. "
+            "Response includes next_cursor when more pages exist."
+        ),
+        args_model=ListWalletLedgerArgs,
+        output_model=ListWalletLedgerEnvelope,
+        handler=_list_wallet_ledger,
     ),
     ToolSpec(
         name="nakama_list_collections",

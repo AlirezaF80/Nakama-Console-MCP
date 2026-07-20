@@ -26,7 +26,7 @@ Use `--env-file path/to/.env` when the MCP client should load credentials from a
 
 ## Tools
 
-12 read-only tools, all marked `readOnlyHint` for MCP clients.
+13 read-only tools, all marked `readOnlyHint` for MCP clients.
 
 | Tool | What it does |
 | --- | --- |
@@ -36,6 +36,7 @@ Use `--env-file path/to/.env` when the MCP client should load credentials from a
 | `nakama_export_account` | Full dump; `response_mode=auto\|resource\|inline` (large → MCP resource link) |
 | `nakama_get_friends` | Friend list for a user |
 | `nakama_get_user_groups` | Groups a user belongs to |
+| `nakama_list_wallet_ledger` | Wallet ledger history; optional `after`/`before` time filters |
 | `nakama_list_collections` | Storage collection names |
 | `nakama_list_storage` | Storage metadata; filter by collection, key prefix, or user_id |
 | `nakama_list_user_storage` | Storage metadata for one user |
@@ -50,7 +51,8 @@ List endpoints aggregate up to `max_objects` (default 100, cap 1000) unless you 
 1. **`nakama_status`** — confirm which Console environment is connected.
 2. **`nakama_list_user_storage`** or **`nakama_list_storage_keys`** — narrow by `user_id` / `collection`; read `hint`.
 3. **`nakama_get_storage_objects`** — fetch values for known keys (≤50 per call; parallel calls OK).
-4. **`nakama_export_account`** — full single-user dump when needed; use `response_mode=resource` for large payloads.
+4. **`nakama_list_wallet_ledger`** — currency changeset history (use `after`/`before` to narrow); `nakama_get_account` for current balances.
+5. **`nakama_export_account`** — full single-user dump when needed; use `response_mode=resource` for large payloads.
 
 See [docs/research/nakama-mcp-agent-ux.md](docs/research/nakama-mcp-agent-ux.md) for API limits and design rationale.
 
@@ -58,7 +60,8 @@ See [docs/research/nakama-mcp-agent-ux.md](docs/research/nakama-mcp-agent-ux.md)
 
 | Parameter | Tools | Purpose |
 | --- | --- | --- |
-| `cursor` | list accounts / storage | Fetch one Nakama page; use `next_cursor` from prior response |
+| `cursor` | list accounts / storage / wallet ledger | Fetch one Nakama page; use `next_cursor` from prior response |
+| `after` / `before` | wallet ledger | ISO-8601 time window for ledger entries |
 | `include_value` | get storage object(s) | `false` = metadata only |
 | `max_value_chars` | get storage object(s) | Truncate large JSON to `value_preview` |
 | `response_mode` | export account | `auto` (default), `resource`, or `inline` |

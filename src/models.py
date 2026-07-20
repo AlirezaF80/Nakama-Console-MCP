@@ -11,13 +11,9 @@ from src.response_format import DEFAULT_VALUE_PREVIEW_CHARS, MAX_VALUE_PREVIEW_C
 from src.validation import key_prefix_to_filter, validate_storage_key_filter
 
 
-class ListAccountsArgs(BaseModel):
-    filter: Optional[str] = Field(
-        default=None, description="User ID or username filter"
-    )
-    tombstones: Optional[bool] = Field(
-        default=None, description="Search only recorded deletes"
-    )
+class ListCursorArgs(BaseModel):
+    """Shared cursor + max_objects for paginated list tools."""
+
     cursor: Optional[str] = Field(
         default=None,
         description="Opaque cursor from a prior response next_cursor field (single page)",
@@ -33,8 +29,48 @@ class ListAccountsArgs(BaseModel):
     )
 
 
+class ListPageMeta(BaseModel):
+    """Shared pagination metadata for list tool envelopes."""
+
+    total_count: int = Field(
+        description="Approximate total matching entries (0 if Nakama omits it)"
+    )
+    fetched: int = Field(description="Number of entries returned in this response")
+    complete: bool = Field(
+        description="True if all matching entries were returned within max_objects"
+    )
+    next_cursor: Optional[str] = Field(
+        default=None,
+        description="Opaque cursor for the next page when complete is false",
+    )
+    hint: Optional[str] = Field(
+        default=None, description="Suggested next step or narrowing advice"
+    )
+
+
+class ListAccountsArgs(ListCursorArgs):
+    filter: Optional[str] = Field(
+        default=None, description="User ID or username filter"
+    )
+    tombstones: Optional[bool] = Field(
+        default=None, description="Search only recorded deletes"
+    )
+
+
 class GetAccountArgs(BaseModel):
     id: str = Field(description="Nakama user id (UUID)")
+
+
+class ListWalletLedgerArgs(ListCursorArgs):
+    id: str = Field(description="Nakama user id (UUID)")
+    after: Optional[str] = Field(
+        default=None,
+        description="Optional ISO-8601 timestamp; only entries after this time",
+    )
+    before: Optional[str] = Field(
+        default=None,
+        description="Optional ISO-8601 timestamp; only entries before this time",
+    )
 
 
 class ExportAccountArgs(BaseModel):
@@ -48,7 +84,7 @@ class ExportAccountArgs(BaseModel):
     )
 
 
-class ListStorageArgs(BaseModel):
+class ListStorageArgs(ListCursorArgs):
     collection: Optional[str] = Field(
         default=None, description="Filter by collection name"
     )
@@ -57,19 +93,6 @@ class ListStorageArgs(BaseModel):
         description="Suffix % prefix only (e.g. 'level%'). Requires collection.",
     )
     user_id: Optional[str] = Field(default=None, description="Filter by user/owner ID")
-    cursor: Optional[str] = Field(
-        default=None,
-        description="Opaque cursor from a prior response next_cursor field (single page)",
-    )
-    max_objects: int = Field(
-        default=DEFAULT_MAX_OBJECTS,
-        ge=1,
-        le=MAX_OBJECTS_HARD_LIMIT,
-        description=(
-            f"Max objects to return (default {DEFAULT_MAX_OBJECTS}, "
-            f"hard max {MAX_OBJECTS_HARD_LIMIT})"
-        ),
-    )
 
     @model_validator(mode="after")
     def validate_key_filters(self):
@@ -80,26 +103,13 @@ class ListStorageArgs(BaseModel):
         return self
 
 
-class ListUserStorageArgs(BaseModel):
+class ListUserStorageArgs(ListCursorArgs):
     user_id: str = Field(description="Nakama user id (UUID) — required")
     collection: Optional[str] = Field(
         default=None, description="Filter by collection name"
     )
     key_prefix: Optional[str] = Field(
         default=None, description="Key prefix filter (appends % if omitted)"
-    )
-    cursor: Optional[str] = Field(
-        default=None,
-        description="Opaque cursor from a prior response next_cursor field (single page)",
-    )
-    max_objects: int = Field(
-        default=DEFAULT_MAX_OBJECTS,
-        ge=1,
-        le=MAX_OBJECTS_HARD_LIMIT,
-        description=(
-            f"Max objects to return (default {DEFAULT_MAX_OBJECTS}, "
-            f"hard max {MAX_OBJECTS_HARD_LIMIT})"
-        ),
     )
 
     @model_validator(mode="after")
@@ -109,24 +119,11 @@ class ListUserStorageArgs(BaseModel):
         return self
 
 
-class ListStorageKeysArgs(BaseModel):
+class ListStorageKeysArgs(ListCursorArgs):
     collection: str = Field(description="Collection name — required")
     user_id: Optional[str] = Field(default=None, description="Filter by user/owner ID")
     key_prefix: Optional[str] = Field(
         default=None, description="Key prefix filter (appends % if omitted)"
-    )
-    cursor: Optional[str] = Field(
-        default=None,
-        description="Opaque cursor from a prior response next_cursor field (single page)",
-    )
-    max_objects: int = Field(
-        default=DEFAULT_MAX_OBJECTS,
-        ge=1,
-        le=MAX_OBJECTS_HARD_LIMIT,
-        description=(
-            f"Max objects to return (default {DEFAULT_MAX_OBJECTS}, "
-            f"hard max {MAX_OBJECTS_HARD_LIMIT})"
-        ),
     )
 
     @model_validator(mode="after")
@@ -183,55 +180,25 @@ class GetStorageObjectsArgs(BaseModel):
 # --- Response envelopes (MCP outputSchema) ---
 
 
-class ListAccountsEnvelope(BaseModel):
+class ListAccountsEnvelope(ListPageMeta):
     users: list[dict[str, Any]] = Field(description="Account user objects from Nakama")
-    total_count: int = Field(description="Approximate total matching accounts")
-    fetched: int = Field(description="Number of users returned in this response")
-    complete: bool = Field(
-        description="True if all matching users were returned within max_objects"
-    )
-    next_cursor: Optional[str] = Field(
-        default=None,
-        description="Opaque cursor for the next page when complete is false",
-    )
-    hint: Optional[str] = Field(
-        default=None, description="Suggested next step or narrowing advice"
+
+
+class ListWalletLedgerEnvelope(ListPageMeta):
+    items: list[dict[str, Any]] = Field(
+        description="Wallet ledger entries (id, changeset, metadata, timestamps)"
     )
 
 
-class ListStorageEnvelope(BaseModel):
+class ListStorageEnvelope(ListPageMeta):
     objects: list[dict[str, Any]] = Field(
         description="Storage object metadata only (no values)"
     )
-    total_count: int = Field(description="Approximate total matching storage objects")
-    fetched: int = Field(description="Number of objects returned in this response")
-    complete: bool = Field(
-        description="True if all matching objects were returned within max_objects"
-    )
-    next_cursor: Optional[str] = Field(
-        default=None,
-        description="Opaque cursor for the next page when complete is false",
-    )
-    hint: Optional[str] = Field(
-        default=None, description="Suggested next step or narrowing advice"
-    )
 
 
-class ListStorageKeysEnvelope(BaseModel):
+class ListStorageKeysEnvelope(ListPageMeta):
     keys: list[dict[str, str]] = Field(
         description="Storage object identities as {key, user_id} (collection is implicit)"
-    )
-    total_count: int = Field(description="Approximate total matching storage objects")
-    fetched: int = Field(description="Number of keys returned in this response")
-    complete: bool = Field(
-        description="True if all matching keys were returned within max_objects"
-    )
-    next_cursor: Optional[str] = Field(
-        default=None,
-        description="Opaque cursor for the next page when complete is false",
-    )
-    hint: Optional[str] = Field(
-        default=None, description="Suggested next step or narrowing advice"
     )
 
 
@@ -389,8 +356,11 @@ class UserGroupsEnvelope(BaseModel):
 
 
 __all__ = [
+    "ListCursorArgs",
+    "ListPageMeta",
     "ListAccountsArgs",
     "GetAccountArgs",
+    "ListWalletLedgerArgs",
     "ExportAccountArgs",
     "ListStorageArgs",
     "ListUserStorageArgs",
@@ -399,6 +369,7 @@ __all__ = [
     "StorageObjectId",
     "GetStorageObjectsArgs",
     "ListAccountsEnvelope",
+    "ListWalletLedgerEnvelope",
     "ListStorageEnvelope",
     "ListStorageKeysEnvelope",
     "StorageBatchResultItem",
