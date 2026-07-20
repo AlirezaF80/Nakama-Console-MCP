@@ -65,11 +65,17 @@ class ListWalletLedgerArgs(ListCursorArgs):
     id: str = Field(description="Nakama user id (UUID)")
     after: Optional[str] = Field(
         default=None,
-        description="Optional ISO-8601 timestamp; only entries after this time",
+        description=(
+            "Optional ISO-8601 timestamp; only entries after this time "
+            "(requires Nakama ≥ 3.33; older servers ignore)"
+        ),
     )
     before: Optional[str] = Field(
         default=None,
-        description="Optional ISO-8601 timestamp; only entries before this time",
+        description=(
+            "Optional ISO-8601 timestamp; only entries before this time "
+            "(requires Nakama ≥ 3.33; older servers ignore)"
+        ),
     )
 
 

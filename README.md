@@ -36,7 +36,7 @@ Use `--env-file path/to/.env` when the MCP client should load credentials from a
 | `nakama_export_account` | Full dump; `response_mode=auto\|resource\|inline` (large → MCP resource link) |
 | `nakama_get_friends` | Friend list for a user |
 | `nakama_get_user_groups` | Groups a user belongs to |
-| `nakama_list_wallet_ledger` | Wallet ledger history; optional `after`/`before` time filters |
+| `nakama_list_wallet_ledger` | Wallet ledger history; optional `after`/`before` (Nakama ≥ 3.33; older ignore) |
 | `nakama_list_collections` | Storage collection names |
 | `nakama_list_storage` | Storage metadata; filter by collection, key prefix, or user_id |
 | `nakama_list_user_storage` | Storage metadata for one user |
@@ -61,7 +61,7 @@ See [docs/research/nakama-mcp-agent-ux.md](docs/research/nakama-mcp-agent-ux.md)
 | Parameter | Tools | Purpose |
 | --- | --- | --- |
 | `cursor` | list accounts / storage / wallet ledger | Fetch one Nakama page; use `next_cursor` from prior response |
-| `after` / `before` | wallet ledger | ISO-8601 time window for ledger entries |
+| `after` / `before` | wallet ledger | Optional ISO-8601 time window (Nakama ≥ 3.33; older servers ignore) |
 | `include_value` | get storage object(s) | `false` = metadata only |
 | `max_value_chars` | get storage object(s) | Truncate large JSON to `value_preview` |
 | `response_mode` | export account | `auto` (default), `resource`, or `inline` |

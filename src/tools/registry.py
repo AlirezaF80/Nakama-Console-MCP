@@ -211,7 +211,8 @@ TOOL_SPECS: list[ToolSpec] = [
             "Prefer over export when only currency history is needed. "
             "Pass cursor for one page; omit cursor to aggregate "
             f"up to max_objects (default {DEFAULT_MAX_OBJECTS}). "
-            "Optional after/before ISO-8601 time filters. "
+            "Optional after/before ISO-8601 time filters require Nakama ≥ 3.33; "
+            "older servers ignore them. "
             "Response includes next_cursor when more pages exist."
         ),
         args_model=ListWalletLedgerArgs,
